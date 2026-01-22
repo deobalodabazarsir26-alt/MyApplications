@@ -1,0 +1,7 @@
+{
+  "name": "Employee Management System",
+  "description": "A comprehensive system for managing employee data, offices, and banking information with role-based access control and visual dashboards.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
