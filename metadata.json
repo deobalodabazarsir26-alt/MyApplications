@@ -1,7 +1,5 @@
 {
-  "name": "Employee Management System",
-  "description": "A comprehensive system for managing employee data, offices, and banking information with role-based access control and visual dashboards.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "name": "Employee Management System (EMS Pro)",
+  "description": "A enterprise-ready dashboard for managing corporate employee data, office logistics, and financial linkages. Features include role-based access, data validation, and visual analytics.",
+  "requestFramePermissions": []
 }

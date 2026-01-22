@@ -1,6 +1,9 @@
 
 import { AppData, UserType, ServiceType } from './types';
 
+// Replace this URL with your deployed Google Apps Script Web App URL
+export const GSHEET_API_URL = ''; 
+
 export const INITIAL_DATA: AppData = {
   users: [
     { User_ID: 1, User_Name: 'admin', Password: '123', User_Type: UserType.ADMIN },
@@ -34,28 +37,6 @@ export const INITIAL_DATA: AppData = {
     { Pay_ID: 1, Pay_Name: 'Level 10 (56100-177500)' },
     { Pay_ID: 2, Pay_Name: 'Level 7 (44900-142400)' },
   ],
-  employees: [
-    {
-      Employee_ID: 1,
-      Employee_Name: 'John',
-      Employee_Surname: 'Doe',
-      Gender: 'Male',
-      DOB: '1985-05-15',
-      PwD: 'No',
-      Service_Type: ServiceType.REGULAR,
-      Post_ID: 1,
-      Pay_ID: 1,
-      Department_ID: 1,
-      Office_ID: 1,
-      Mobile: '9876543210',
-      EPIC: 'ABC1234567',
-      Bank_ID: 1,
-      Branch_ID: 1,
-      ACC_No: '1234567890',
-      IFSC_Code: 'SBIN0001'
-    }
-  ],
-  userPostSelections: {
-    2: [1, 2] // Initial selection for user1 (Normal user)
-  }
+  employees: [],
+  userPostSelections: {}
 };
