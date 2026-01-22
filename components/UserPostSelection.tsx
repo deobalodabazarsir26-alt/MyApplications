@@ -11,7 +11,9 @@ interface UserPostSelectionProps {
 
 const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser, onToggle }) => {
   const selections = data.userPostSelections || {};
-  const rawSelections = selections[currentUser.User_ID];
+  // Force numeric ID to ensure we hit the correct key in the mapping
+  const currentUserId = Number(currentUser.User_ID);
+  const rawSelections = selections[currentUserId];
   const selectedPostIds = Array.isArray(rawSelections) ? rawSelections : [];
   const isAdmin = currentUser.User_Type === UserType.ADMIN;
 
@@ -57,13 +59,14 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
             </thead>
             <tbody>
               {(data.posts || []).map((post) => {
-                const isSelected = selectedPostIds.includes(post.Post_ID);
+                // Ensure comparison is strictly numeric
+                const isSelected = selectedPostIds.includes(Number(post.Post_ID));
                 return (
                   <tr key={post.Post_ID} className={isSelected ? "table-primary-subtle" : ""}>
                     {!isAdmin && (
                       <td className="ps-4 text-center">
                         <button 
-                          onClick={() => onToggle(post.Post_ID)}
+                          onClick={() => onToggle(Number(post.Post_ID))}
                           className={`btn btn-sm p-1 rounded-circle border-0 transition-all ${isSelected ? 'text-primary' : 'text-muted opacity-25'}`}
                           title={isSelected ? "Click to remove" : "Click to select"}
                         >

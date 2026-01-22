@@ -17,10 +17,15 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const savedUser = localStorage.getItem('ems_user');
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch (e) {
-      return null;
-    }
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && typeof parsed.User_ID !== 'number') {
+          parsed.User_ID = Number(parsed.User_ID);
+        }
+        return parsed;
+      }
+    } catch (e) {}
+    return null;
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -45,19 +50,47 @@ export default function App() {
       setIsLoading(true);
       const remoteData = await syncService.fetchAllData();
       if (remoteData) {
-        // Ensure userPostSelections is a clean object with numeric keys
-        // Google Sheet JSON often provides keys as strings even for numeric IDs
+        // Robust Data Sanitization: Convert all string-based IDs from Google Sheets to Numbers
+        const sanitizeTable = (table: any[], idKey: string) => {
+          if (!Array.isArray(table)) return [];
+          return table.map(item => {
+            const newItem = { ...item };
+            Object.keys(newItem).forEach(key => {
+              if (key === idKey || key.endsWith('_ID') || key === 'AC_No') {
+                if (newItem[key] !== undefined && newItem[key] !== null && newItem[key] !== '') {
+                  newItem[key] = Number(newItem[key]);
+                }
+              }
+            });
+            return newItem;
+          });
+        };
+
+        const sanitizedData: any = { ...remoteData };
+        sanitizedData.users = sanitizeTable(remoteData.users, 'User_ID');
+        sanitizedData.departments = sanitizeTable(remoteData.departments, 'Department_ID');
+        sanitizedData.offices = sanitizeTable(remoteData.offices, 'Office_ID');
+        sanitizedData.banks = sanitizeTable(remoteData.banks, 'Bank_ID');
+        sanitizedData.branches = sanitizeTable(remoteData.branches, 'Branch_ID');
+        sanitizedData.posts = sanitizeTable(remoteData.posts, 'Post_ID');
+        sanitizedData.payscales = sanitizeTable(remoteData.payscales, 'Pay_ID');
+        sanitizedData.employees = sanitizeTable(remoteData.employees, 'Employee_ID');
+
+        // Sanitize UserPostSelections Mapping
         const rawSelections = (remoteData.userPostSelections || {}) as Record<string, any>;
         const sanitizedSelections: Record<number, number[]> = {};
         
         Object.keys(rawSelections).forEach(key => {
           const val = rawSelections[key];
-          sanitizedSelections[Number(key)] = Array.isArray(val) ? val.map(Number) : [];
+          const numericKey = Number(key);
+          if (!isNaN(numericKey)) {
+            sanitizedSelections[numericKey] = Array.isArray(val) ? val.map(Number).filter(v => !isNaN(v)) : [];
+          }
         });
 
         const mergedData = { 
           ...INITIAL_DATA, 
-          ...remoteData,
+          ...sanitizedData,
           userPostSelections: sanitizedSelections
         };
         
@@ -86,7 +119,7 @@ export default function App() {
     const employees = data.employees || [];
     if (currentUser.User_Type === UserType.ADMIN) return employees;
     const userOfficeIds = (data.offices || [])
-      .filter(o => o.User_ID === currentUser.User_ID)
+      .filter(o => Number(o.User_ID) === Number(currentUser.User_ID))
       .map(o => o.Office_ID);
     return employees.filter(e => userOfficeIds.includes(e.Office_ID));
   }, [currentUser, data.employees, data.offices]);
@@ -181,7 +214,8 @@ export default function App() {
   };
 
   const handleLogin = (user: User) => {
-    setCurrentUser(user);
+    const sanitizedUser = { ...user, User_ID: Number(user.User_ID) };
+    setCurrentUser(sanitizedUser);
     setActiveTab('dashboard');
   };
 
