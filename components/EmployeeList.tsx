@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Employee, AppData, ServiceType, User, UserType } from '../types';
+import { Employee, AppData, ServiceType, User, UserType, Department } from '../types';
 import { Search, Plus, Edit2, Filter, ChevronLeft, ChevronRight, XCircle, Briefcase, AlertTriangle, CheckCircle2, Trash2, Layers, Building2, Tag, Activity } from 'lucide-react';
 
 interface EmployeeListProps {
@@ -26,6 +26,12 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
 
   const isAdmin = currentUser.User_Type === UserType.ADMIN;
 
+  // Helper to extract department type reliably across potential case variations from GSheets
+  const getDeptType = (dept?: Department): string => {
+    if (!dept) return '';
+    return (dept.Department_Type || (dept as any).department_type || '').trim();
+  };
+
   // --- 1. BASE DATA SCOPING ---
   const userRelevantOffices = useMemo(() => {
     if (isAdmin) return data.offices || [];
@@ -50,8 +56,8 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
     if (!isAdmin) return [];
     const types = new Set<string>();
     (data.departments || []).forEach(d => {
-      const type = d.Department_Type || (d as any).department_type;
-      if (type && type.trim()) types.add(type.trim());
+      const type = getDeptType(d);
+      if (type) types.add(type);
     });
     return Array.from(types).sort();
   }, [data.departments, isAdmin]);
@@ -60,7 +66,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
     const counts: Record<string, number> = {};
     filteredBySearch.forEach(emp => {
       const d = data.departments.find(dept => Number(dept.Department_ID) === Number(emp.Department_ID));
-      const type = d?.Department_Type || (d as any)?.department_type;
+      const type = getDeptType(d);
       if (type) counts[type] = (counts[type] || 0) + 1;
     });
     return counts;
@@ -70,7 +76,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
     if (!isAdmin || !deptTypeFilter) return filteredBySearch;
     return filteredBySearch.filter(emp => {
       const d = data.departments.find(dept => Number(dept.Department_ID) === Number(emp.Department_ID));
-      return (d?.Department_Type || (d as any)?.department_type) === deptTypeFilter;
+      return getDeptType(d) === deptTypeFilter;
     });
   }, [filteredBySearch, deptTypeFilter, isAdmin, data.departments]);
 
@@ -82,7 +88,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
       depts = depts.filter(d => relevantOfficeDeptIds.has(Number(d.Department_ID)));
     }
     if (isAdmin && deptTypeFilter) {
-      depts = depts.filter(d => (d.Department_Type || (d as any).department_type) === deptTypeFilter);
+      depts = depts.filter(d => getDeptType(d) === deptTypeFilter);
     }
     return depts;
   }, [data.departments, isAdmin, deptTypeFilter, userRelevantOffices]);
@@ -167,8 +173,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
   useEffect(() => {
     if (deptTypeFilter) {
       const selectedDept = data.departments.find(d => Number(d.Department_ID) === Number(deptFilter));
-      const type = selectedDept?.Department_Type || (selectedDept as any)?.department_type;
-      if (selectedDept && type !== deptTypeFilter) setDeptFilter('');
+      if (selectedDept && getDeptType(selectedDept) !== deptTypeFilter) setDeptFilter('');
     }
   }, [deptTypeFilter, data.departments, deptFilter]);
 
@@ -218,7 +223,6 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
           </button>
         </div>
 
-        {/* RE-ENGINEERED FILTER GRID TO PREVENT CRUMBLING */}
         <div className="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3 mb-3">
           <div className="col">
             <div className="input-group shadow-sm h-100 overflow-hidden">
@@ -331,6 +335,7 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
               const post = data.posts.find(p => Number(p.Post_ID) === Number(emp.Post_ID))?.Post_Name;
               const payscale = data.payscales.find(p => Number(p.Pay_ID) === Number(emp.Pay_ID))?.Pay_Name;
               const isActive = emp.Active !== 'No';
+              const dType = getDeptType(dObj);
 
               return (
                 <tr key={emp.Employee_ID} className={!isActive ? 'bg-light opacity-75' : ''}>
@@ -354,7 +359,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
                   <td>
                     <div className="small fw-semibold text-secondary text-truncate" style={{maxWidth: '180px'}} title={office}>{office}</div>
                     <div className="small text-muted text-truncate" style={{maxWidth: '180px'}} title={dObj?.Department_Name}>
-                      {dObj?.Department_Name} {isAdmin && (dObj?.Department_Type || (dObj as any)?.department_type) && <span className="badge bg-light text-dark border ms-1" style={{fontSize: '0.6rem'}}>{dObj.Department_Type || (dObj as any).department_type}</span>}
+                      {dObj?.Department_Name} {isAdmin && dType && (
+                        <span className="badge bg-light text-dark border ms-1" style={{fontSize: '0.6rem'}}>{dType}</span>
+                      )}
                     </div>
                   </td>
                   <td>
