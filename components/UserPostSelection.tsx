@@ -83,27 +83,40 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
               {selectedPosts.map(post => (
                 <div key={post.Post_ID} className="col-12 col-md-6 col-lg-4">
                   <div className="card border-0 shadow-sm rounded-3 h-100 selection-chip bg-white overflow-hidden">
-                    <div className="card-body p-3 d-flex align-items-center gap-2">
-                      <div className="bg-primary-subtle text-primary rounded-circle p-2 flex-shrink-0 d-flex align-items-center justify-content-center" style={{width: '32px', height: '32px'}}>
-                        <Briefcase size={16} />
-                      </div>
-                      
-                      <div className="flex-grow-1 min-width-0">
-                        <div className="fw-bold small text-truncate text-dark" title={post.Post_Name}>
-                          {post.Post_Name}
+                    <div className="card-body p-3 d-flex align-items-center justify-content-between gap-2">
+                      <div className="d-flex align-items-center gap-2 flex-grow-1 min-width-0">
+                        <div className="bg-primary-subtle text-primary rounded-circle p-2 flex-shrink-0 d-flex align-items-center justify-content-center" style={{width: '32px', height: '32px'}}>
+                          <Briefcase size={16} />
                         </div>
-                        <div className="text-muted text-truncate" style={{fontSize: '0.65rem'}}>
-                          Class {post.Class} • {post.Category}
+                        
+                        <div className="min-width-0">
+                          <div className="fw-bold small text-truncate text-dark" title={post.Post_Name}>
+                            {post.Post_Name}
+                          </div>
+                          <div className="text-muted text-truncate" style={{fontSize: '0.65rem'}}>
+                            Class {post.Class} • {post.Category}
+                          </div>
                         </div>
                       </div>
 
                       <button 
-                        onClick={() => onToggle(Number(post.Post_ID))}
-                        className="btn btn-danger-subtle btn-sm rounded-circle p-1 flex-shrink-0 border-0 hover-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggle(Number(post.Post_ID));
+                        }}
+                        className="btn btn-danger-subtle btn-sm rounded-circle p-1 flex-shrink-0 border-0 hover-action-btn shadow-sm ms-2"
                         title="Remove Designation"
-                        style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ 
+                          width: '30px', 
+                          height: '30px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          position: 'relative',
+                          zIndex: 5
+                        }}
                       >
-                        <X size={16} />
+                        <X size={16} strokeWidth={3} />
                       </button>
                     </div>
                   </div>
@@ -151,7 +164,7 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
         <div className="card-body p-0">
           <div className="table-responsive" style={{maxHeight: '400px'}}>
             <table className="table table-hover align-middle mb-0">
-              <thead className="table-light sticky-top" style={{zIndex: 1}}>
+              <thead className="table-light sticky-top" style={{zIndex: 10}}>
                 <tr>
                   <th className="ps-4 py-3 border-0">Post Name</th>
                   <th className="border-0">Class</th>
@@ -213,12 +226,12 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
           color: #dc2626;
         }
         .hover-action-btn:hover {
-          background-color: #fca5a5 !important;
-          color: #b91c1c !important;
+          background-color: #ef4444 !important;
+          color: white !important;
           transform: scale(1.1);
         }
         .min-width-0 { min-width: 0; }
-        .sticky-top { top: 0; }
+        .sticky-top { top: 0; position: sticky; background: white; }
         .bg-light-subtle { background-color: #f8fafc; }
       `}</style>
     </div>

@@ -24,10 +24,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [availableOffices, setAvailableOffices] = useState(data.offices || []);
   const [availableBranches, setAvailableBranches] = useState(() => {
-    if (employee?.Bank_ID && data.branches) {
+    // Correctly handle Bank_ID 0 or other numbers
+    if (employee && employee.Bank_ID !== undefined && employee.Bank_ID !== null && data.branches) {
       return data.branches.filter(b => Number(b.Bank_ID) === Number(employee.Bank_ID));
     }
-    return data.branches || [];
+    return [];
   });
 
   const selections = data.userPostSelections || {};
@@ -48,11 +49,12 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
   }, [formData.Department_ID, data.offices]);
 
   useEffect(() => {
-    if (formData.Bank_ID !== undefined && formData.Bank_ID !== '' && data.branches) {
+    // Explicit check for undefined/null/empty string to support numeric 0
+    if (formData.Bank_ID !== undefined && formData.Bank_ID !== null && formData.Bank_ID !== '' && data.branches) {
       const filtered = data.branches.filter(b => Number(b.Bank_ID) === Number(formData.Bank_ID));
       setAvailableBranches(filtered);
     } else {
-      setAvailableBranches(data.branches || []);
+      setAvailableBranches([]);
     }
   }, [formData.Bank_ID, data.branches]);
 
@@ -61,7 +63,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
     
     // Employee ID Validation
     const idValue = Number(formData.Employee_ID);
-    if (!formData.Employee_ID && formData.Employee_ID !== 0) {
+    if (formData.Employee_ID === undefined || formData.Employee_ID === null || formData.Employee_ID === '') {
       newErrors.Employee_ID = "Employee ID is required";
     } else if (isNaN(idValue) || idValue <= 0) {
       newErrors.Employee_ID = "Employee ID must be a positive number";
@@ -146,7 +148,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
 
     // Logic for Branch Change: Auto-populate IFSC
     if (name === 'Branch_ID') {
-      const branchId = value === '' ? null : Number(value);
+      const branchId = finalValue === '' ? null : Number(finalValue);
       const branch = (data.branches || []).find(b => Number(b.Branch_ID) === branchId);
       setFormData(prev => ({ 
         ...prev, 
