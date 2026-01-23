@@ -14,6 +14,7 @@ export interface User {
 export interface Department {
   Department_ID: number;
   Department_Name: string;
+  Department_Type?: string; // e.g. State, Central, Autonomous
 }
 
 export interface Office {

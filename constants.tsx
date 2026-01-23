@@ -10,9 +10,9 @@ export const INITIAL_DATA: AppData = {
     { User_ID: 2, User_Name: 'user1', Password: '123', User_Type: UserType.NORMAL },
   ],
   departments: [
-    { Department_ID: 1, Department_Name: 'Education' },
-    { Department_ID: 2, Department_Name: 'Health' },
-    { Department_ID: 3, Department_Name: 'Public Works' },
+    { Department_ID: 1, Department_Name: 'Education', Department_Type: 'State Govt' },
+    { Department_ID: 2, Department_Name: 'Health', Department_Type: 'State Govt' },
+    { Department_ID: 3, Department_Name: 'Public Works', Department_Type: 'Autonomous' },
   ],
   offices: [
     { Office_ID: 1, Office_Name: 'High School A', Block: 'Central', AC_No: 101, Department_ID: 1, User_ID: 1 },

@@ -1,7 +1,18 @@
 
 import React from 'react';
 import { UserType, User, AppData } from '../types';
-import { LayoutDashboard, Users, Building2, Landmark, LogOut, ChevronRight, Briefcase } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  Users, 
+  Building2, 
+  Landmark, 
+  LogOut, 
+  ChevronRight, 
+  Briefcase, 
+  ShieldCheck, 
+  Layers, 
+  DollarSign 
+} from 'lucide-react';
 
 interface SidebarProps {
   data: AppData;
@@ -21,13 +32,18 @@ const Sidebar: React.FC<SidebarProps> = ({ data, activeTab, setActiveTab, curren
     { id: 'employees', label: 'Employees', icon: <Users size={20} />, adminOnly: false },
     { 
       id: 'managePosts', 
-      label: userType === UserType.ADMIN ? 'All Posts' : 'Manage My Posts', 
+      label: userType === UserType.ADMIN ? 'Designation Master' : 'My Designations', 
       icon: <Briefcase size={20} />, 
       adminOnly: false,
       badge: userType !== UserType.ADMIN && selectedCount > 0 ? selectedCount : null
     },
-    { id: 'offices', label: 'Offices', icon: <Building2 size={20} />, adminOnly: true },
-    { id: 'banks', label: 'Banks', icon: <Landmark size={20} />, adminOnly: true },
+    { type: 'divider', adminOnly: true },
+    { type: 'header', label: 'Administration', adminOnly: true },
+    { id: 'users', label: 'User Accounts', icon: <ShieldCheck size={20} />, adminOnly: true },
+    { id: 'offices', label: 'Office Master', icon: <Building2 size={20} />, adminOnly: true },
+    { id: 'departments', label: 'Departments', icon: <Layers size={20} />, adminOnly: true },
+    { id: 'banks', label: 'Bank & Branches', icon: <Landmark size={20} />, adminOnly: true },
+    { id: 'serviceMaster', label: 'Post & Pay Master', icon: <DollarSign size={20} />, adminOnly: true },
   ];
 
   return (
@@ -36,20 +52,27 @@ const Sidebar: React.FC<SidebarProps> = ({ data, activeTab, setActiveTab, curren
         <div className="bg-primary rounded-3 p-2 me-2 d-flex align-items-center justify-content-center text-white" style={{width: '40px', height: '40px'}}>
           <Users size={24} strokeWidth={3} />
         </div>
-        <span className="fs-4 fw-bold tracking-tight">EMS Portal</span>
+        <span className="fs-4 fw-bold tracking-tight text-white">EMS Portal</span>
       </div>
       
-      <hr className="bg-secondary" />
-
       <ul className="nav nav-pills flex-column mb-auto">
-        {menuItems.map((item) => {
+        {menuItems.map((item, idx) => {
           if (item.adminOnly && userType !== UserType.ADMIN) return null;
+          
+          if (item.type === 'divider') {
+            return <hr key={`div-${idx}`} className="bg-secondary opacity-25 my-3" />;
+          }
+          
+          if (item.type === 'header') {
+            return <li key={`head-${idx}`} className="px-3 mb-2 small text-uppercase text-secondary fw-bold" style={{fontSize: '0.65rem', letterSpacing: '0.05em'}}>{item.label}</li>;
+          }
+
           const isActive = activeTab === item.id || (item.id === 'employees' && activeTab === 'employeeForm');
           
           return (
             <li className="nav-item" key={item.id}>
               <button
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => setActiveTab(item.id!)}
                 className={`nav-link border-0 w-100 text-start ${isActive ? 'active' : ''}`}
               >
                 {item.icon}
@@ -62,7 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({ data, activeTab, setActiveTab, curren
         })}
       </ul>
 
-      <hr className="bg-secondary" />
+      <hr className="bg-secondary opacity-25" />
       
       <div className="dropdown">
         <div className="d-flex align-items-center text-white text-decoration-none px-2 mb-2">
@@ -70,11 +93,11 @@ const Sidebar: React.FC<SidebarProps> = ({ data, activeTab, setActiveTab, curren
             {userName.charAt(0).toUpperCase()}
           </div>
           <div className="overflow-hidden">
-            <div className="fw-bold small truncate">{userName}</div>
+            <div className="fw-bold small text-truncate">{userName}</div>
             <div className="text-secondary" style={{fontSize: '0.7rem'}}>{userType} Account</div>
           </div>
         </div>
-        <button onClick={onLogout} className="btn btn-dark btn-sm w-100 d-flex align-items-center justify-content-center gap-2 mt-2">
+        <button onClick={onLogout} className="btn btn-dark btn-sm w-100 d-flex align-items-center justify-content-center gap-2 mt-2 border-secondary">
           <LogOut size={14} /> Sign Out
         </button>
       </div>

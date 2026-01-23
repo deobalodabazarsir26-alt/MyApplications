@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
 import { Office, AppData } from '../types';
-import { Plus, Edit2, Building2, MapPin, Hash, UserCheck, X, Save } from 'lucide-react';
+import { Plus, Edit2, Building2, MapPin, Hash, UserCheck, X, Save, Trash2, Lock } from 'lucide-react';
 
 interface OfficeManagementProps {
   data: AppData;
   onSaveOffice: (office: Office) => void;
+  onDeleteOffice: (officeId: number) => void;
 }
 
-const OfficeManagement: React.FC<OfficeManagementProps> = ({ data, onSaveOffice }) => {
+const OfficeManagement: React.FC<OfficeManagementProps> = ({ data, onSaveOffice, onDeleteOffice }) => {
   const [editingOffice, setEditingOffice] = useState<Partial<Office> | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -44,6 +45,16 @@ const OfficeManagement: React.FC<OfficeManagementProps> = ({ data, onSaveOffice 
     }
   };
 
+  const isDeletable = (officeId: number) => {
+    return !data.employees.some(e => Number(e.Office_ID) === officeId);
+  };
+
+  const handleDelete = (office: Office) => {
+    if (window.confirm(`Delete office "${office.Office_Name}"? This cannot be undone.`)) {
+      onDeleteOffice(Number(office.Office_ID));
+    }
+  };
+
   return (
     <div className="container-fluid px-0">
       <div className="card shadow-sm border-0 rounded-4 overflow-hidden">
@@ -59,7 +70,7 @@ const OfficeManagement: React.FC<OfficeManagementProps> = ({ data, onSaveOffice 
           </div>
           <button 
             onClick={() => { setEditingOffice({}); setErrors({}); }}
-            className="btn btn-primary d-flex align-items-center gap-2"
+            className="btn btn-primary d-flex align-items-center gap-2 shadow-sm"
           >
             <Plus size={18} />
             Add New Office
@@ -133,7 +144,7 @@ const OfficeManagement: React.FC<OfficeManagementProps> = ({ data, onSaveOffice 
                   <div className="invalid-feedback">{errors.Department_ID}</div>
                 </div>
                 <div className="col-md-6">
-                  <label className="form-label small fw-bold">Assign to User</label>
+                  <label className="form-label small fw-bold">Assign to User (Custodian)</label>
                   <div className="input-group has-validation">
                     <span className="input-group-text bg-white"><UserCheck size={16} /></span>
                     <select 
@@ -150,7 +161,7 @@ const OfficeManagement: React.FC<OfficeManagementProps> = ({ data, onSaveOffice 
                 </div>
                 <div className="col-12 d-flex justify-content-end gap-2 mt-4">
                   <button type="button" onClick={() => setEditingOffice(null)} className="btn btn-light px-4">Cancel</button>
-                  <button type="submit" className="btn btn-primary px-4 d-flex align-items-center gap-2">
+                  <button type="submit" className="btn btn-primary px-4 d-flex align-items-center gap-2 shadow-sm">
                     <Save size={18} /> Save Office
                   </button>
                 </div>
@@ -170,40 +181,54 @@ const OfficeManagement: React.FC<OfficeManagementProps> = ({ data, onSaveOffice 
                 </tr>
               </thead>
               <tbody>
-                {data.offices.map(office => (
-                  <tr key={office.Office_ID}>
-                    <td className="ps-4">
-                      <div className="fw-bold">{office.Office_Name}</div>
-                      <div className="small text-muted">ID: #{office.Office_ID}</div>
-                    </td>
-                    <td>
-                      <div className="d-flex align-items-center gap-1">
-                        <span className="badge bg-light text-dark fw-normal border">{office.Block}</span>
-                        <span className="badge bg-primary-subtle text-primary fw-normal border border-primary-subtle">AC {office.AC_No}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="text-secondary small">
-                        {data.departments.find(d => d.Department_ID === office.Department_ID)?.Department_Name || 'Unlinked'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="bg-secondary-subtle text-secondary rounded-circle d-flex align-items-center justify-content-center" style={{width: '24px', height: '24px', fontSize: '0.7rem'}}>
-                          {(data.users.find(u => u.User_ID === office.User_ID)?.User_Name || '?').charAt(0).toUpperCase()}
+                {data.offices.map(office => {
+                  const deletable = isDeletable(Number(office.Office_ID));
+                  return (
+                    <tr key={office.Office_ID}>
+                      <td className="ps-4">
+                        <div className="fw-bold">{office.Office_Name}</div>
+                        <div className="small text-muted">ID: #{office.Office_ID}</div>
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-1">
+                          <span className="badge bg-light text-dark fw-normal border">{office.Block}</span>
+                          <span className="badge bg-primary-subtle text-primary fw-normal border border-primary-subtle">AC {office.AC_No}</span>
                         </div>
-                        <span className="small">
-                          {data.users.find(u => u.User_ID === office.User_ID)?.User_Name || 'None'}
+                      </td>
+                      <td>
+                        <span className="text-secondary small">
+                          {data.departments.find(d => Number(d.Department_ID) === Number(office.Department_ID))?.Department_Name || 'Unlinked'}
                         </span>
-                      </div>
-                    </td>
-                    <td className="text-end pe-4">
-                      <button onClick={() => { setEditingOffice(office); setErrors({}); }} className="btn btn-light btn-sm rounded-pill text-primary me-1" title="Edit">
-                        <Edit2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="bg-secondary-subtle text-secondary rounded-circle d-flex align-items-center justify-content-center" style={{width: '24px', height: '24px', fontSize: '0.7rem'}}>
+                            {(data.users.find(u => Number(u.User_ID) === Number(office.User_ID))?.User_Name || '?').charAt(0).toUpperCase()}
+                          </div>
+                          <span className="small">
+                            {data.users.find(u => Number(u.User_ID) === Number(office.User_ID))?.User_Name || 'None'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-end pe-4">
+                        <div className="d-flex gap-1 justify-content-end">
+                          <button onClick={() => { setEditingOffice(office); setErrors({}); }} className="btn btn-light btn-sm rounded-3 text-primary border" title="Edit">
+                            <Edit2 size={14} />
+                          </button>
+                          {deletable ? (
+                            <button onClick={() => handleDelete(office)} className="btn btn-light btn-sm rounded-3 text-danger border" title="Delete">
+                              <Trash2 size={14} />
+                            </button>
+                          ) : (
+                            <button className="btn btn-light btn-sm rounded-3 text-muted border opacity-50" title="Locked: Office has employees" disabled>
+                              <Lock size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
