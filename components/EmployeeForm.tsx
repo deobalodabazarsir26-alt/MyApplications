@@ -41,7 +41,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
     : posts.filter(p => userPostSelections.includes(p.Post_ID));
 
   useEffect(() => {
-    if (formData.Department_ID !== undefined && formData.Department_ID !== '' && data.offices) {
+    if (typeof formData.Department_ID === 'number' && data.offices) {
       setAvailableOffices(data.offices.filter(o => Number(o.Department_ID) === Number(formData.Department_ID)));
     } else {
       setAvailableOffices(data.offices || []);
@@ -49,8 +49,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
   }, [formData.Department_ID, data.offices]);
 
   useEffect(() => {
-    // Explicit check for undefined/null/empty string to support numeric 0
-    if (formData.Bank_ID !== undefined && formData.Bank_ID !== null && formData.Bank_ID !== '' && data.branches) {
+    // Explicit check for numeric type to support numeric 0 and avoid TS comparison errors
+    if (typeof formData.Bank_ID === 'number' && data.branches) {
       const filtered = data.branches.filter(b => Number(b.Bank_ID) === Number(formData.Bank_ID));
       setAvailableBranches(filtered);
     } else {
@@ -63,7 +63,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
     
     // Employee ID Validation
     const idValue = Number(formData.Employee_ID);
-    if (formData.Employee_ID === undefined || formData.Employee_ID === null || formData.Employee_ID === '') {
+    if (formData.Employee_ID === undefined || formData.Employee_ID === null || (formData.Employee_ID as any) === '') {
       newErrors.Employee_ID = "Employee ID is required";
     } else if (isNaN(idValue) || idValue <= 0) {
       newErrors.Employee_ID = "Employee ID must be a positive number";
@@ -93,12 +93,12 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
       newErrors.ACC_No = "Enter a valid account number (9-18 digits)";
     }
 
-    if (formData.Department_ID === undefined || formData.Department_ID === '') newErrors.Department_ID = "Please select a department";
-    if (formData.Office_ID === undefined || formData.Office_ID === '') newErrors.Office_ID = "Please select an office";
-    if (formData.Post_ID === undefined || formData.Post_ID === '') newErrors.Post_ID = "Please select a post";
-    if (formData.Pay_ID === undefined || formData.Pay_ID === '') newErrors.Pay_ID = "Please select a payscale";
-    if (formData.Bank_ID === undefined || formData.Bank_ID === '') newErrors.Bank_ID = "Please select a bank";
-    if (formData.Branch_ID === undefined || formData.Branch_ID === '') newErrors.Branch_ID = "Please select a branch";
+    if (formData.Department_ID === undefined || formData.Department_ID === null || (formData.Department_ID as any) === '') newErrors.Department_ID = "Please select a department";
+    if (formData.Office_ID === undefined || formData.Office_ID === null || (formData.Office_ID as any) === '') newErrors.Office_ID = "Please select an office";
+    if (formData.Post_ID === undefined || formData.Post_ID === null || (formData.Post_ID as any) === '') newErrors.Post_ID = "Please select a post";
+    if (formData.Pay_ID === undefined || formData.Pay_ID === null || (formData.Pay_ID as any) === '') newErrors.Pay_ID = "Please select a payscale";
+    if (formData.Bank_ID === undefined || formData.Bank_ID === null || (formData.Bank_ID as any) === '') newErrors.Bank_ID = "Please select a bank";
+    if (formData.Branch_ID === undefined || formData.Branch_ID === null || (formData.Branch_ID as any) === '') newErrors.Branch_ID = "Please select a branch";
     if (!formData.DOB) newErrors.DOB = "Date of birth is required";
     if (!formData.EPIC?.trim()) newErrors.EPIC = "EPIC number is required";
 
@@ -127,7 +127,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let finalValue: any = value;
-    if (name.includes('ID') || name === 'AC_No' || name === 'Employee_ID') finalValue = value === '' ? '' : Number(value);
+    
+    // For ID fields, convert to number if possible, else keep as empty string for the controlled input
+    if (name.includes('ID') || name === 'AC_No' || name === 'Employee_ID') {
+      finalValue = value === '' ? '' : Number(value);
+    }
     
     // Logic for Status Change
     if (name === 'Active' && value === 'Yes') {
@@ -140,7 +144,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
       setFormData(prev => ({ 
         ...prev, 
         [name]: finalValue, 
-        Branch_ID: '', 
+        Branch_ID: '' as any, 
         IFSC_Code: '' 
       }));
       return;
