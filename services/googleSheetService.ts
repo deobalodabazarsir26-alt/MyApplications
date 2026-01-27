@@ -7,7 +7,7 @@ export const syncService = {
     if (!GSHEET_API_URL) return null;
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for fetches
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // Increased to 60s for slow GAS instances
 
     try {
       const response = await fetch(GSHEET_API_URL, { signal: controller.signal });
@@ -15,8 +15,12 @@ export const syncService = {
       
       if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
       return await response.json();
-    } catch (error) {
-      console.error('Error fetching data from cloud:', error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.error('Fetch request timed out after 60 seconds');
+      } else {
+        console.error('Error fetching data from cloud:', error);
+      }
       return null;
     }
   },
@@ -24,12 +28,18 @@ export const syncService = {
   async saveData(action: string, payload: any): Promise<{success: boolean, error?: string}> {
     if (!GSHEET_API_URL) return { success: true };
     
+    // We increase timeout for POST requests too, as scripts can take time to process
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
     try {
       const response = await fetch(GSHEET_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Use text/plain to avoid CORS preflight issues with GAS
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action, payload }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       
@@ -39,9 +49,10 @@ export const syncService = {
       }
       
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving to cloud:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+      const message = error.name === 'AbortError' ? 'Request timed out (60s)' : (error instanceof Error ? error.message : 'Network error');
+      return { success: false, error: message };
     }
   }
 };

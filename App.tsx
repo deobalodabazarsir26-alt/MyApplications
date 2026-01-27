@@ -110,7 +110,7 @@ export default function App() {
         localStorage.setItem('ems_data', JSON.stringify(mergedData));
       } catch (e) {}
     } else {
-      setSyncError("Cloud connection failed. Working in local mode.");
+      setSyncError("Cloud connection timed out or failed. Check your internet or Google Sheet settings.");
     }
     
     if (showIndicator) setIsLoading(false);
@@ -145,13 +145,15 @@ export default function App() {
 
     const result = await syncService.saveData(action, payload);
     if (!result.success) {
-      setSyncError(`Update failed: ${result.error || 'Write conflict'}`);
+      setSyncError(`Update failed: ${result.error || 'Connection error'}`);
       await loadData(false);
     } else {
       setLastSynced(new Date());
     }
     setIsSyncing(false);
   };
+
+  // --- Master Data Handlers ---
 
   const upsertUser = (user: User) => {
     const now = new Date().toLocaleString();
@@ -175,59 +177,34 @@ export default function App() {
 
   const upsertDepartment = (dept: Department) => {
     const now = new Date().toLocaleString();
-    const depts = data.departments || [];
-    const exists = depts.find(d => Number(d.Department_ID) === Number(dept.Department_ID));
+    const exists = data.departments.find(d => Number(d.Department_ID) === Number(dept.Department_ID));
     const finalDept = exists
       ? { ...dept, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...dept, Department_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newDepts = exists
-      ? depts.map(d => Number(d.Department_ID) === Number(dept.Department_ID) ? finalDept : d)
-      : [...depts, finalDept];
+      ? data.departments.map(d => Number(d.Department_ID) === Number(dept.Department_ID) ? finalDept : d)
+      : [...data.departments, finalDept];
     performSync('upsertDepartment', finalDept, { ...data, departments: newDepts });
   };
 
   const deleteDepartment = (deptId: number) => {
-    const hasLinked = data.offices.some(o => Number(o.Department_ID) === deptId) || data.employees.some(e => Number(e.Department_ID) === deptId);
-    if (hasLinked) return alert("Department has linked offices or employees.");
     const newDepts = data.departments.filter(d => Number(d.Department_ID) !== deptId);
     performSync('deleteDepartment', { Department_ID: deptId }, { ...data, departments: newDepts });
   };
 
-  const upsertEmployee = (employee: Employee) => {
-    const now = new Date().toLocaleString();
-    const employees = data.employees || [];
-    const exists = employees.find(e => Number(e.Employee_ID) === Number(employee.Employee_ID));
-    const finalEmp = exists
-      ? { ...employee, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
-      : { ...employee, Employee_ID: Number(employee.Employee_ID), T_STMP_ADD: now, T_STMP_UPD: now };
-    const newEmployees = exists
-      ? employees.map(e => Number(e.Employee_ID) === Number(employee.Employee_ID) ? finalEmp : e)
-      : [...employees, finalEmp];
-    performSync('upsertEmployee', finalEmp, { ...data, employees: newEmployees });
-    setActiveTab('employees');
-    setEditingEmployee(null);
-  };
-
-  const deleteEmployee = (empId: number) => {
-    const newEmployees = data.employees.filter(e => Number(e.Employee_ID) !== empId);
-    performSync('deleteEmployee', { Employee_ID: empId }, { ...data, employees: newEmployees });
-  };
-
   const upsertOffice = (office: Office) => {
     const now = new Date().toLocaleString();
-    const offices = data.offices || [];
-    const exists = offices.find(o => Number(o.Office_ID) === Number(office.Office_ID));
-    const finalOff = exists
+    const exists = data.offices.find(o => Number(o.Office_ID) === Number(office.Office_ID));
+    const finalOffice = exists
       ? { ...office, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...office, Office_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newOffices = exists
-      ? offices.map(o => Number(o.Office_ID) === Number(office.Office_ID) ? finalOff : o)
-      : [...offices, finalOff];
-    performSync('upsertOffice', finalOff, { ...data, offices: newOffices });
+      ? data.offices.map(o => Number(o.Office_ID) === Number(office.Office_ID) ? finalOffice : o)
+      : [...data.offices, finalOffice];
+    performSync('upsertOffice', finalOffice, { ...data, offices: newOffices });
   };
 
   const deleteOffice = (officeId: number) => {
-    if (data.employees.some(e => Number(e.Office_ID) === officeId)) return alert("Office has active employees.");
     const newOffices = data.offices.filter(o => Number(o.Office_ID) !== officeId);
     performSync('deleteOffice', { Office_ID: officeId }, { ...data, offices: newOffices });
   };
@@ -235,17 +212,21 @@ export default function App() {
   const upsertBank = (bank: Bank) => {
     const now = new Date().toLocaleString();
     const exists = data.banks.find(b => Number(b.Bank_ID) === Number(bank.Bank_ID));
-    const finalBk = exists
+    const finalBank = exists
       ? { ...bank, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...bank, Bank_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newBanks = exists
-      ? data.banks.map(b => Number(b.Bank_ID) === Number(bank.Bank_ID) ? finalBk : b)
-      : [...data.banks, finalBk];
-    performSync('upsertBank', finalBk, { ...data, banks: newBanks });
+      ? data.banks.map(b => Number(b.Bank_ID) === Number(bank.Bank_ID) ? finalBank : b)
+      : [...data.banks, finalBank];
+    performSync('upsertBank', finalBank, { ...data, banks: newBanks });
   };
 
   const deleteBank = (bankId: number) => {
-    if (data.branches.some(b => Number(b.Bank_ID) === bankId)) return alert("Bank has active branches.");
+    const hasBranches = (data.branches || []).some(b => Number(b.Bank_ID) === bankId);
+    const hasEmployees = (data.employees || []).some(e => Number(e.Bank_ID) === bankId);
+    if (hasBranches || hasEmployees) {
+      return alert("Cannot delete bank: It has registered branches or assigned employees.");
+    }
     const newBanks = data.banks.filter(b => Number(b.Bank_ID) !== bankId);
     performSync('deleteBank', { Bank_ID: bankId }, { ...data, banks: newBanks });
   };
@@ -253,17 +234,34 @@ export default function App() {
   const upsertBranch = (branch: BankBranch) => {
     const now = new Date().toLocaleString();
     const exists = data.branches.find(b => Number(b.Branch_ID) === Number(branch.Branch_ID));
-    const finalBr = exists
+    const finalBranch = exists
       ? { ...branch, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...branch, Branch_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newBranches = exists
-      ? data.branches.map(b => Number(b.Branch_ID) === Number(branch.Branch_ID) ? finalBr : b)
-      : [...data.branches, finalBr];
-    performSync('upsertBranch', finalBr, { ...data, branches: newBranches });
+      ? data.branches.map(b => Number(b.Branch_ID) === Number(branch.Branch_ID) ? finalBranch : b)
+      : [...data.branches, finalBranch];
+    performSync('upsertBranch', finalBranch, { ...data, branches: newBranches });
+  };
+
+  const batchUpsertBranches = (branches: BankBranch[]) => {
+    const now = new Date().toLocaleString();
+    const newBranches = [...data.branches];
+    
+    branches.forEach(branch => {
+      const idx = newBranches.findIndex(b => Number(b.Branch_ID) === Number(branch.Branch_ID));
+      if (idx !== -1) {
+        newBranches[idx] = { ...branch, T_STMP_UPD: now };
+      }
+    });
+
+    performSync('batchUpsertBranches', branches, { ...data, branches: newBranches });
   };
 
   const deleteBranch = (branchId: number) => {
-    if (data.employees.some(e => Number(e.Branch_ID) === branchId)) return alert("Branch is assigned to employees.");
+    const hasEmployees = (data.employees || []).some(e => Number(e.Branch_ID) === branchId);
+    if (hasEmployees) {
+      return alert("Cannot delete branch: It is currently assigned to one or more employees.");
+    }
     const newBranches = data.branches.filter(b => Number(b.Branch_ID) !== branchId);
     performSync('deleteBranch', { Branch_ID: branchId }, { ...data, branches: newBranches });
   };
@@ -281,135 +279,196 @@ export default function App() {
   };
 
   const deletePost = (postId: number) => {
-    if (data.employees.some(e => Number(e.Post_ID) === postId)) return alert("Post is assigned to employees.");
     const newPosts = data.posts.filter(p => Number(p.Post_ID) !== postId);
     performSync('deletePost', { Post_ID: postId }, { ...data, posts: newPosts });
   };
 
-  const upsertPayscale = (payscale: Payscale) => {
+  const upsertPayscale = (pay: Payscale) => {
     const now = new Date().toLocaleString();
-    const exists = data.payscales.find(s => Number(s.Pay_ID) === Number(payscale.Pay_ID));
-    const finalScale = exists
-      ? { ...payscale, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
-      : { ...payscale, Pay_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
-    const newScales = exists
-      ? data.payscales.map(s => Number(s.Pay_ID) === Number(payscale.Pay_ID) ? finalScale : s)
-      : [...data.payscales, finalScale];
-    performSync('upsertPayscale', finalScale, { ...data, payscales: newScales });
+    const exists = data.payscales.find(p => Number(p.Pay_ID) === Number(pay.Pay_ID));
+    const finalPay = exists
+      ? { ...pay, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
+      : { ...pay, Pay_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
+    const newPays = exists
+      ? data.payscales.map(p => Number(p.Pay_ID) === Number(pay.Pay_ID) ? finalPay : p)
+      : [...data.payscales, finalPay];
+    performSync('upsertPayscale', finalPay, { ...data, payscales: newPays });
   };
 
   const deletePayscale = (payId: number) => {
-    if (data.employees.some(e => Number(e.Pay_ID) === payId)) return alert("Scale is assigned to employees.");
-    const newScales = data.payscales.filter(s => Number(s.Pay_ID) !== payId);
-    performSync('deletePayscale', { Pay_ID: payId }, { ...data, payscales: newScales });
+    const newPays = data.payscales.filter(p => Number(p.Pay_ID) !== payId);
+    performSync('deletePayscale', { Pay_ID: payId }, { ...data, payscales: newPays });
   };
 
-  const handleTogglePostSelection = (postId: number) => {
+  const upsertEmployee = (employee: Employee) => {
+    const now = new Date().toLocaleString();
+    const exists = data.employees.find(e => Number(e.Employee_ID) === Number(employee.Employee_ID));
+    const finalEmployee = {
+      ...employee,
+      T_STMP_ADD: exists ? exists.T_STMP_ADD : now,
+      T_STMP_UPD: now
+    };
+    const newEmployees = exists
+      ? data.employees.map(e => Number(e.Employee_ID) === Number(employee.Employee_ID) ? finalEmployee : e)
+      : [...data.employees, finalEmployee];
+    
+    performSync('upsertEmployee', finalEmployee, { ...data, employees: newEmployees });
+    setEditingEmployee(null);
+    setActiveTab('employees');
+  };
+
+  const deleteEmployee = (empId: number) => {
+    const newEmployees = data.employees.filter(e => Number(e.Employee_ID) !== empId);
+    performSync('deleteEmployee', { Employee_ID: empId }, { ...data, employees: newEmployees });
+  };
+
+  const togglePostSelection = (postId: number) => {
     if (!currentUser) return;
     const userId = Number(currentUser.User_ID);
-    const current = Array.isArray(data.userPostSelections[userId]) ? data.userPostSelections[userId] : [];
-    const isSelected = current.includes(Number(postId));
-    const next = isSelected ? current.filter(id => Number(id) !== Number(postId)) : [...current, Number(postId)];
-    const newState = { ...data, userPostSelections: { ...data.userPostSelections, [userId]: next } };
-    performSync('updatePostSelections', { User_ID: userId, Post_IDs: next }, newState);
+    const currentSelections = data.userPostSelections[userId] || [];
+    const newSelections = currentSelections.includes(postId)
+      ? currentSelections.filter(id => id !== postId)
+      : [...currentSelections, postId];
+    
+    const newMap = { ...data.userPostSelections, [userId]: newSelections };
+    performSync('updateUserPostSelections', { User_ID: userId, Post_IDs: newSelections }, { ...data, userPostSelections: newMap });
   };
 
-  const handleLogin = (user: User) => {
-    setCurrentUser({ ...user, User_ID: Number(user.User_ID) });
-    setActiveTab('dashboard');
-    loadData(true);
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setActiveTab('dashboard');
-  };
-
-  if (!currentUser) return <Login users={data.users || []} onLogin={handleLogin} />;
-
-  if (isLoading) {
-    return (
-      <div className="min-vh-100 d-flex flex-column align-items-center justify-content-center bg-light">
-        <RefreshCw size={48} className="text-primary mb-3 spin-animate" />
-        <h5 className="fw-bold">Establishing Cloud Session...</h5>
-        <p className="text-muted small">Synchronizing Relational Database V4.1</p>
-      </div>
-    );
+  if (!currentUser) {
+    return <Login users={data.users || []} onLogin={(user) => {
+      setCurrentUser(user);
+      localStorage.setItem('ems_user', JSON.stringify(user));
+    }} />;
   }
 
   const renderContent = () => {
+    if (activeTab === 'employeeForm' || editingEmployee) {
+      return (
+        <EmployeeForm 
+          employee={editingEmployee}
+          data={data}
+          currentUser={currentUser}
+          onSave={upsertEmployee}
+          onCancel={() => { setEditingEmployee(null); setActiveTab('employees'); }}
+        />
+      );
+    }
+
     switch (activeTab) {
-      case 'dashboard': return <Dashboard employees={filteredEmployees} data={data} />;
-      case 'employees': return <EmployeeList employees={filteredEmployees} data={data} currentUser={currentUser} onEdit={(emp) => { setEditingEmployee(emp); setActiveTab('employeeForm'); }} onAddNew={() => { setEditingEmployee(null); setActiveTab('employeeForm'); }} onDelete={deleteEmployee} />;
-      case 'employeeForm': return <EmployeeForm employee={editingEmployee} data={data} currentUser={currentUser} onSave={upsertEmployee} onCancel={() => setActiveTab('employees')} />;
-      case 'users': return <UserManagement data={data} onSaveUser={upsertUser} onDeleteUser={deleteUser} />;
-      case 'offices': return <OfficeManagement data={data} onSaveOffice={upsertOffice} onDeleteOffice={deleteOffice} />;
-      case 'departments': return <DepartmentManagement data={data} onSaveDepartment={upsertDepartment} onDeleteDepartment={deleteDepartment} />;
-      case 'banks': return <BankManagement data={data} onSaveBank={upsertBank} onDeleteBank={deleteBank} onSaveBranch={upsertBranch} onDeleteBranch={deleteBranch} />;
-      case 'serviceMaster': return <ServiceMasterManagement data={data} onSavePost={upsertPost} onDeletePost={deletePost} onSavePayscale={upsertPayscale} onDeletePayscale={deletePayscale} />;
-      case 'managePosts': return <UserPostSelection data={data} currentUser={currentUser} onToggle={handleTogglePostSelection} />;
-      default: return <Dashboard employees={filteredEmployees} data={data} />;
+      case 'dashboard':
+        return <Dashboard employees={filteredEmployees} data={data} />;
+      case 'employees':
+        return (
+          <EmployeeList 
+            employees={filteredEmployees} 
+            data={data} 
+            currentUser={currentUser}
+            onEdit={setEditingEmployee}
+            onAddNew={() => setActiveTab('employeeForm')}
+            onDelete={deleteEmployee}
+          />
+        );
+      case 'managePosts':
+        return <UserPostSelection data={data} currentUser={currentUser} onToggle={togglePostSelection} />;
+      case 'users':
+        return <UserManagement data={data} onSaveUser={upsertUser} onDeleteUser={deleteUser} />;
+      case 'offices':
+        return <OfficeManagement data={data} onSaveOffice={upsertOffice} onDeleteOffice={deleteOffice} />;
+      case 'departments':
+        return <DepartmentManagement data={data} onSaveDepartment={upsertDepartment} onDeleteDepartment={deleteDepartment} />;
+      case 'banks':
+        return (
+          <BankManagement 
+            data={data} 
+            onSaveBank={upsertBank} 
+            onDeleteBank={deleteBank} 
+            onSaveBranch={upsertBranch} 
+            onDeleteBranch={deleteBranch} 
+            onBatchUpdateBranches={batchUpsertBranches}
+          />
+        );
+      case 'serviceMaster':
+        return <ServiceMasterManagement data={data} onSavePost={upsertPost} onDeletePost={deletePost} onSavePayscale={upsertPayscale} onDeletePayscale={deletePayscale} />;
+      default:
+        return <Dashboard employees={filteredEmployees} data={data} />;
     }
   };
 
   return (
-    <div className="container-fluid p-0 d-flex flex-column flex-md-row min-vh-100">
-      <Sidebar data={data} activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
-      <main className="flex-grow-1 bg-light p-3 p-md-5 overflow-auto position-relative">
-        <header className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-3">
+    <div className="d-flex min-vh-100 bg-light">
+      <Sidebar 
+        data={data} 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        currentUser={currentUser} 
+        onLogout={() => {
+          setCurrentUser(null);
+          localStorage.removeItem('ems_user');
+        }} 
+      />
+      <div className="flex-grow-1" style={{ overflowY: 'auto', height: '100vh' }}>
+        <header className="bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center sticky-top shadow-sm" style={{zIndex: 1000}}>
           <div className="d-flex align-items-center gap-3">
-            <div>
-              <h1 className="h3 fw-bold mb-1 text-capitalize">{activeTab === 'managePosts' ? 'Configuration' : activeTab.replace(/([A-Z])/g, ' $1')}</h1>
-              <div className="d-flex align-items-center gap-2">
-                <span className="badge bg-primary rounded-pill d-inline-flex align-items-center gap-1" style={{fontSize: '0.65rem'}}>Cloud Active</span>
+            <h5 className="mb-0 fw-bold text-dark">
+              {activeTab.charAt(0).toUpperCase() + activeTab.slice(1).replace(/([A-Z])/g, ' $1')}
+            </h5>
+            {isSyncing ? (
+              <span className="badge bg-primary-subtle text-primary d-flex align-items-center gap-1 animate-pulse">
+                <RefreshCw size={12} className="animate-spin" /> Syncing...
+              </span>
+            ) : syncError ? (
+              <span className="badge bg-danger-subtle text-danger d-flex align-items-center gap-1">
+                <AlertCircle size={12} /> Sync Error
+              </span>
+            ) : (
+              <span className="badge bg-success-subtle text-success d-flex align-items-center gap-1">
+                <CheckCircle size={12} /> Connected
+              </span>
+            )}
+          </div>
+          <div className="d-flex align-items-center gap-3">
+            <div className="text-end d-none d-md-block">
+              <div className="small text-muted d-flex align-items-center gap-1">
+                <Clock size={12} /> Last sync: {lastSynced.toLocaleTimeString()}
               </div>
             </div>
-            <button onClick={() => loadData(false)} className={`btn btn-light btn-sm rounded-pill border shadow-sm px-3 d-flex align-items-center gap-2 ${isSyncing ? 'disabled' : ''}`}>
-              <RefreshCw size={14} className={isSyncing ? 'spin-animate text-primary' : ''} />
-              <span className="d-none d-lg-inline">Refresh Data</span>
+            <button 
+              onClick={() => loadData()} 
+              disabled={isSyncing} 
+              className="btn btn-light btn-sm rounded-pill border shadow-sm px-3 d-flex align-items-center gap-2"
+            >
+              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} /> 
+              {isSyncing ? 'Loading...' : 'Refresh'}
             </button>
           </div>
-          <div className="d-flex align-items-center gap-3">
-            <div className="d-flex flex-column align-items-end me-2 text-end">
-              <div className={`d-flex align-items-center gap-1 px-2 py-1 bg-white rounded-pill border small ${syncError ? 'text-danger border-danger' : 'text-success border-success'}`}>
-                {isSyncing ? <RefreshCw size={12} className="spin-animate" /> : syncError ? <AlertCircle size={12} /> : <CheckCircle size={12} />}
-                <span className="fw-bold" style={{fontSize: '0.65rem'}}>{isSyncing ? 'Syncing...' : syncError ? 'Error' : 'Synced'}</span>
-              </div>
-              <div className="text-muted d-flex align-items-center gap-1 mt-1 justify-content-end" style={{fontSize: '0.6rem'}}>
-                <Clock size={10} /> {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-            <div className="d-none d-md-block text-end">
-              <div className="fw-bold small text-dark">{currentUser.User_Name}</div>
-              <span className="badge bg-primary rounded-pill" style={{fontSize: '0.65rem'}}>{currentUser.User_Type}</span>
-            </div>
-            <button onClick={handleLogout} className="btn btn-outline-danger btn-sm rounded-circle p-2 shadow-sm border-2"><LogOut size={18} /></button>
-          </div>
         </header>
-        {syncError && (
-          <div className="alert alert-warning border-0 shadow-sm rounded-3 py-2 d-flex align-items-center gap-2 small mb-4 animate-fade-in">
-            <AlertCircle size={16} />
-            <span className="fw-medium">{syncError}</span>
-            <button className="btn btn-sm btn-outline-warning border-0 ms-auto py-0" onClick={() => setSyncError(null)}>Dismiss</button>
-          </div>
-        )}
-        <div className={`container-xl px-0 ${isSyncing ? 'opacity-75' : ''}`} style={{ transition: 'opacity 0.2s', pointerEvents: isSyncing ? 'none' : 'auto' }}>
-          {renderContent()}
-        </div>
-        {isSyncing && (
-          <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ zIndex: 1000, backgroundColor: 'rgba(255,255,255,0.4)' }}>
-            <div className="bg-white p-3 rounded-pill shadow-lg border d-flex align-items-center gap-3 animate-fade-in">
-              <RefreshCw size={20} className="text-primary spin-animate" />
-              <span className="fw-bold text-dark small">Committing Changes to Cloud...</span>
+
+        <main className="p-4">
+          {syncError && (
+            <div className="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+              <AlertCircle size={18} />
+              <div>
+                <div className="fw-bold">Synchronization Notice</div>
+                <div className="small">{syncError}</div>
+              </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+          {isLoading && !isSyncing ? (
+            <div className="d-flex flex-column align-items-center justify-content-center py-5 mt-5">
+              <div className="spinner-border text-primary mb-3" role="status"></div>
+              <p className="text-muted fw-medium">Initializing workspace data...</p>
+            </div>
+          ) : (
+            renderContent()
+          )}
+        </main>
+      </div>
+      
       <style>{`
+        .animate-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .spin-animate { animation: spin 1s linear infinite; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
       `}</style>
     </div>
   );
