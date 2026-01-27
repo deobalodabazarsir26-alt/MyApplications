@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Bank, BankBranch, AppData } from '../types';
-import { Plus, Landmark, Building, Hash, Save, MapPin, Trash2, Edit2, Lock, X, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, Landmark, Building, Hash, Save, MapPin, Trash2, Edit2, Lock, X, Search, Loader2, AlertCircle, RefreshCw, ChevronRight, ListFilter } from 'lucide-react';
 import { ifscService } from '../services/ifscService';
 
 interface BankManagementProps {
@@ -14,12 +14,23 @@ interface BankManagementProps {
 }
 
 const BankManagement: React.FC<BankManagementProps> = ({ data, onSaveBank, onDeleteBank, onSaveBranch, onDeleteBranch, onBatchUpdateBranches }) => {
+  const [selectedBankId, setSelectedBankId] = useState<number | null>(null);
   const [editingBank, setEditingBank] = useState<Partial<Bank> | null>(null);
   const [editingBranch, setEditingBranch] = useState<Partial<BankBranch> | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [ifscError, setIfscError] = useState('');
+
+  const filteredBranches = useMemo(() => {
+    if (selectedBankId === null) return data.branches;
+    return data.branches.filter(b => Number(b.Bank_ID) === selectedBankId);
+  }, [data.branches, selectedBankId]);
+
+  const selectedBank = useMemo(() => 
+    data.banks.find(b => Number(b.Bank_ID) === selectedBankId), 
+    [data.banks, selectedBankId]
+  );
 
   const handleBankSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,11 +63,9 @@ const BankManagement: React.FC<BankManagementProps> = ({ data, onSaveBank, onDel
     
     if (details) {
       if (branch) {
-        // Individual row update logic
         const updated = { ...branch, Branch_Name: details.BRANCH } as BankBranch;
         onSaveBranch(updated);
       } else {
-        // Editing form update logic
         const existingBank = data.banks.find(b => 
           b.Bank_Name.toLowerCase().includes(details.BANK.toLowerCase()) ||
           details.BANK.toLowerCase().includes(b.Bank_Name.toLowerCase())
@@ -78,18 +87,25 @@ const BankManagement: React.FC<BankManagementProps> = ({ data, onSaveBank, onDel
     setIsFetching(false);
   };
 
-  const handleSyncAllNames = async () => {
+  const handleSyncFilteredNames = async () => {
     if (!onBatchUpdateBranches) return;
-    if (!window.confirm(`This will attempt to update names for all ${data.branches.length} branches based on their IFSC codes. Continue?`)) return;
+    const count = filteredBranches.length;
+    if (count === 0) return;
+
+    const msg = selectedBankId 
+      ? `Update all ${count} branches for ${selectedBank?.Bank_Name}?` 
+      : `Update all ${count} branches across all banks?`;
+
+    if (!window.confirm(msg)) return;
 
     setIsSyncingAll(true);
-    setSyncProgress({ current: 0, total: data.branches.length });
+    setSyncProgress({ current: 0, total: count });
     
     const updatedBranches: BankBranch[] = [];
     
-    for (let i = 0; i < data.branches.length; i++) {
-      const branch = data.branches[i];
-      setSyncProgress({ current: i + 1, total: data.branches.length });
+    for (let i = 0; i < filteredBranches.length; i++) {
+      const branch = filteredBranches[i];
+      setSyncProgress({ current: i + 1, total: count });
       
       const details = await ifscService.fetchDetails(branch.IFSC_Code);
       if (details && details.BRANCH) {
@@ -98,81 +114,89 @@ const BankManagement: React.FC<BankManagementProps> = ({ data, onSaveBank, onDel
           Branch_Name: details.BRANCH
         });
       }
-      // Small delay to avoid API rate limiting
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     if (updatedBranches.length > 0) {
       onBatchUpdateBranches(updatedBranches);
-      alert(`Sync Complete! Successfully updated ${updatedBranches.length} branch names.`);
-    } else {
-      alert("No updates were found for the current branch list.");
     }
-    
     setIsSyncingAll(false);
   };
 
   const isBankDeletable = (bankId: number) => {
     const bId = Number(bankId);
-    const hasBranches = (data.branches || []).some(b => Number(b.Bank_ID) === bId);
-    const hasEmployees = (data.employees || []).some(e => Number(e.Bank_ID) === bId);
-    return !hasBranches && !hasEmployees;
+    return !data.branches.some(b => Number(b.Bank_ID) === bId) && 
+           !data.employees.some(e => Number(e.Bank_ID) === bId);
   };
 
   const isBranchDeletable = (branchId: number) => {
-    const brId = Number(branchId);
-    return !(data.employees || []).some(e => Number(e.Branch_ID) === brId);
+    return !data.employees.some(e => Number(e.Branch_ID) === Number(branchId));
   };
 
   return (
     <div className="row g-4">
-      {/* BANKS MASTER */}
+      {/* LEFT: BANK NAVIGATOR */}
       <div className="col-lg-4">
-        <div className="card shadow-sm border-0 rounded-4 h-100">
+        <div className="card shadow-sm border-0 rounded-4 h-100 overflow-hidden">
           <div className="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-            <div className="d-flex align-items-center gap-2">
-              <div className="bg-primary-subtle p-2 rounded-3 text-primary">
-                <Landmark size={20} />
-              </div>
+            <div className="d-flex align-items-center gap-2 text-primary">
+              <Landmark size={20} />
               <h6 className="mb-0 fw-bold">Banks</h6>
             </div>
-            {!editingBank && (
-              <button onClick={() => setEditingBank({})} className="btn btn-sm btn-primary rounded-pill px-3">
-                <Plus size={14} /> Add
-              </button>
-            )}
+            <button onClick={() => setEditingBank({})} className="btn btn-primary btn-sm rounded-pill px-3 shadow-sm">
+              <Plus size={14} /> Add
+            </button>
           </div>
-          <div className="card-body">
+          <div className="card-body p-0">
             {editingBank && (
-              <form onSubmit={handleBankSubmit} className="mb-4 bg-light p-3 rounded-3 border shadow-sm">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <label className="form-label small fw-bold text-muted mb-0">{editingBank.Bank_ID ? 'Update Bank' : 'New Bank'}</label>
-                  <button type="button" onClick={() => setEditingBank(null)} className="btn btn-link text-muted p-0"><X size={16} /></button>
-                </div>
-                <div className="input-group">
-                  <input 
-                    placeholder="Bank Name..." 
-                    value={editingBank.Bank_Name || ''} 
-                    onChange={e => setEditingBank({...editingBank, Bank_Name: e.target.value})}
-                    className="form-control"
-                    required
-                  />
-                  <button className="btn btn-primary" type="submit">
-                    <Save size={18} />
-                  </button>
-                </div>
-              </form>
+              <div className="p-3 bg-light border-bottom animate-fade-in">
+                <form onSubmit={handleBankSubmit}>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <label className="tiny fw-bold text-muted text-uppercase">Bank Name</label>
+                    <button type="button" onClick={() => setEditingBank(null)} className="btn btn-link p-0 text-muted"><X size={14} /></button>
+                  </div>
+                  <div className="input-group input-group-sm">
+                    <input autoFocus required className="form-control" placeholder="Full Bank Name" value={editingBank.Bank_Name || ''} onChange={e => setEditingBank({...editingBank, Bank_Name: e.target.value})} />
+                    <button type="submit" className="btn btn-primary"><Save size={14} /></button>
+                  </div>
+                </form>
+              </div>
             )}
+            
+            <div className="list-group list-group-flush">
+              <button 
+                onClick={() => setSelectedBankId(null)}
+                className={`list-group-item list-group-item-action border-0 d-flex align-items-center justify-content-between py-3 px-4 ${selectedBankId === null ? 'bg-primary-subtle text-primary border-start border-4 border-primary' : ''}`}
+              >
+                <div className="d-flex align-items-center gap-3">
+                  <ListFilter size={18} />
+                  <span className="fw-bold">All Branches</span>
+                </div>
+                <span className="badge bg-white text-dark border rounded-pill small">{data.branches.length}</span>
+              </button>
 
-            <div className="list-group list-group-flush border rounded-3 overflow-hidden shadow-sm">
               {data.banks.map(bank => {
-                const deletable = isBankDeletable(Number(bank.Bank_ID));
+                const isActive = selectedBankId === Number(bank.Bank_ID);
+                const branchCount = data.branches.filter(b => Number(b.Bank_ID) === Number(bank.Bank_ID)).length;
                 return (
-                  <div key={bank.Bank_ID} className="list-group-item d-flex justify-content-between align-items-center py-2">
-                    <span className="fw-semibold small">{bank.Bank_Name}</span>
-                    <div className="d-flex gap-1">
-                      <button onClick={() => setEditingBank(bank)} className="btn btn-xs btn-link text-primary p-1"><Edit2 size={14} /></button>
-                      {deletable && <button onClick={() => onDeleteBank(Number(bank.Bank_ID))} className="btn btn-xs btn-link text-danger p-1"><Trash2 size={14} /></button>}
+                  <div key={bank.Bank_ID} className={`list-group-item list-group-item-action border-0 p-0 ${isActive ? 'bg-primary-subtle border-start border-4 border-primary' : ''}`}>
+                    <div className="d-flex align-items-center p-3 ps-4 gap-3">
+                      <div className={`p-2 rounded-circle ${isActive ? 'bg-primary text-white' : 'bg-light text-muted'}`}>
+                        <Landmark size={14} />
+                      </div>
+                      <div className="flex-grow-1" style={{ cursor: 'pointer' }} onClick={() => setSelectedBankId(Number(bank.Bank_ID))}>
+                        <div className={`fw-bold small mb-0 ${isActive ? 'text-primary' : 'text-dark'}`}>{bank.Bank_Name}</div>
+                        <div className="tiny text-muted">{branchCount} Branches Registered</div>
+                      </div>
+                      <div className="d-flex gap-1">
+                        <button onClick={() => setEditingBank(bank)} className="btn btn-xs btn-outline-secondary border-0 p-1"><Edit2 size={12} /></button>
+                        {isBankDeletable(Number(bank.Bank_ID)) && (
+                          <button onClick={() => onDeleteBank(Number(bank.Bank_ID))} className="btn btn-xs btn-outline-danger border-0 p-1"><Trash2 size={12} /></button>
+                        )}
+                        <button onClick={() => setSelectedBankId(Number(bank.Bank_ID))} className={`btn btn-xs border-0 p-1 ${isActive ? 'text-primary' : 'text-muted'}`}>
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -182,144 +206,132 @@ const BankManagement: React.FC<BankManagementProps> = ({ data, onSaveBank, onDel
         </div>
       </div>
 
-      {/* BRANCHES MASTER */}
+      {/* RIGHT: CONTEXTUAL BRANCH MANAGER */}
       <div className="col-lg-8">
         <div className="card shadow-sm border-0 rounded-4 h-100 overflow-hidden">
           <div className="card-header bg-white border-bottom py-3">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <div className="d-flex align-items-center gap-2">
-                <div className="bg-success-subtle p-2 rounded-3 text-success">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <div className="d-flex align-items-center gap-2 text-success">
                   <Building size={20} />
+                  <h6 className="mb-0 fw-bold">
+                    {selectedBank ? `${selectedBank.Bank_Name} Branches` : 'Global Branch Directory'}
+                  </h6>
                 </div>
-                <h6 className="mb-0 fw-bold">Bank Branches</h6>
+                <p className="tiny text-muted mb-0 mt-1">
+                  {selectedBank ? `Managing locations for ${selectedBank.Bank_Name}` : 'Viewing all registered branch locations'}
+                </p>
               </div>
               <div className="d-flex gap-2">
                 <button 
-                  onClick={handleSyncAllNames} 
-                  disabled={isSyncingAll || data.branches.length === 0}
+                  onClick={handleSyncFilteredNames} 
+                  disabled={isSyncingAll || filteredBranches.length === 0}
                   className="btn btn-sm btn-outline-info rounded-pill px-3 d-flex align-items-center gap-2"
                 >
                   <RefreshCw size={14} className={isSyncingAll ? 'animate-spin' : ''} /> 
-                  {isSyncingAll ? `Syncing ${syncProgress.current}/${syncProgress.total}...` : 'Sync All Names'}
+                  {isSyncingAll ? `Syncing ${syncProgress.current}/${syncProgress.total}...` : 'Sync Visible'}
                 </button>
-                {!editingBranch && (
-                  <button onClick={() => {setEditingBranch({}); setIfscError('');}} className="btn btn-sm btn-success rounded-pill px-3">
-                    <Plus size={14} /> New Branch
-                  </button>
-                )}
+                <button onClick={() => {setEditingBranch({ Bank_ID: selectedBankId || undefined }); setIfscError('');}} className="btn btn-sm btn-success rounded-pill px-3 shadow-sm">
+                  <Plus size={14} /> New Branch
+                </button>
               </div>
             </div>
-
             {isSyncingAll && (
-              <div className="progress rounded-pill bg-light" style={{ height: '6px' }}>
-                <div 
-                  className="progress-bar progress-bar-striped progress-bar-animated bg-info" 
-                  role="progressbar" 
-                  style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
-                ></div>
+              <div className="progress mt-3 rounded-pill bg-light" style={{ height: '4px' }}>
+                <div className="progress-bar bg-info" style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}></div>
               </div>
             )}
           </div>
+
           <div className="card-body">
             {editingBranch && (
-              <form onSubmit={handleBranchSubmit} className="p-3 bg-light rounded-3 border mb-4 shadow-sm animate-fade-in">
+              <div className="p-4 bg-light rounded-4 border mb-4 animate-fade-in shadow-sm">
                 <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="fw-bold mb-0 small text-uppercase text-success">{editingBranch.Branch_ID ? 'Edit Branch' : 'Add Branch'}</h6>
-                  <button type="button" onClick={() => setEditingBranch(null)} className="btn btn-link text-muted p-0"><X size={16} /></button>
+                  <h6 className="fw-bold mb-0 small text-uppercase text-success">{editingBranch.Branch_ID ? 'Update Branch Record' : 'Add New Branch Location'}</h6>
+                  <button onClick={() => setEditingBranch(null)} className="btn btn-link text-muted p-0"><X size={18} /></button>
                 </div>
-                
-                <div className="row g-2">
+                <form onSubmit={handleBranchSubmit} className="row g-3">
                   <div className="col-md-4">
-                    <label className="form-label tiny fw-bold text-muted mb-1 text-uppercase">IFSC Code</label>
+                    <label className="tiny fw-bold text-muted text-uppercase mb-1 d-block">IFSC Code</label>
                     <div className="input-group input-group-sm">
-                      <input 
-                        required 
-                        value={editingBranch.IFSC_Code || ''} 
-                        onChange={e => {
-                          setEditingBranch({...editingBranch, IFSC_Code: e.target.value.toUpperCase()});
-                          setIfscError('');
-                        }}
-                        className="form-control"
-                        placeholder="SBIN00..."
-                      />
+                      <span className="input-group-text bg-white border-end-0"><Hash size={14} /></span>
+                      <input required className="form-control border-start-0 ps-1" value={editingBranch.IFSC_Code || ''} onChange={e => setEditingBranch({...editingBranch, IFSC_Code: e.target.value.toUpperCase()})} placeholder="SBIN00..." />
                       <button type="button" onClick={() => handleIfscLookup()} className="btn btn-success" disabled={isFetching}>
                         {isFetching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                       </button>
                     </div>
                   </div>
-                  
                   <div className="col-md-8">
-                    <label className="form-label tiny fw-bold text-muted mb-1 text-uppercase">Parent Bank</label>
-                    <select 
-                      required 
-                      value={editingBranch.Bank_ID || ''} 
-                      onChange={e => setEditingBranch({...editingBranch, Bank_ID: Number(e.target.value)})}
-                      className="form-select form-select-sm"
-                    >
-                      <option value="">-- Choose Bank --</option>
+                    <label className="tiny fw-bold text-muted text-uppercase mb-1 d-block">Parent Bank</label>
+                    <select required className="form-select form-select-sm" value={editingBranch.Bank_ID || ''} onChange={e => setEditingBranch({...editingBranch, Bank_ID: Number(e.target.value)})}>
+                      <option value="">-- Choose Target Bank --</option>
                       {data.banks.map(b => <option key={b.Bank_ID} value={b.Bank_ID}>{b.Bank_Name}</option>)}
                     </select>
                   </div>
-
                   <div className="col-12">
-                    <label className="form-label tiny fw-bold text-muted mb-1 text-uppercase">Branch Name</label>
-                    <input 
-                      required 
-                      value={editingBranch.Branch_Name || ''} 
-                      onChange={e => setEditingBranch({...editingBranch, Branch_Name: e.target.value})}
-                      className="form-control form-control-sm"
-                      placeholder="Enter branch name..."
-                    />
+                    <label className="tiny fw-bold text-muted text-uppercase mb-1 d-block">Branch Location Name</label>
+                    <div className="input-group input-group-sm">
+                      <span className="input-group-text bg-white border-end-0"><MapPin size={14} /></span>
+                      <input required className="form-control border-start-0 ps-1" value={editingBranch.Branch_Name || ''} onChange={e => setEditingBranch({...editingBranch, Branch_Name: e.target.value})} placeholder="Main Branch / MG Road..." />
+                    </div>
                   </div>
-                  
-                  {ifscError && <div className="col-12 small text-danger mt-1"><AlertCircle size={12} /> {ifscError}</div>}
-                  
-                  <div className="col-12 text-end mt-2">
-                    <button type="submit" className="btn btn-success btn-sm px-4">Save Branch</button>
+                  {ifscError && <div className="col-12 tiny text-danger"><AlertCircle size={12} /> {ifscError}</div>}
+                  <div className="col-12 text-end">
+                    <button type="submit" className="btn btn-success btn-sm px-4 rounded-pill shadow-sm">
+                      <Save size={14} className="me-2" /> {editingBranch.Branch_ID ? 'Update Changes' : 'Register Branch'}
+                    </button>
                   </div>
-                </div>
-              </form>
+                </form>
+              </div>
             )}
 
-            <div className="table-responsive border rounded-3 overflow-hidden shadow-sm">
-              <table className="table table-hover align-middle mb-0 small">
+            <div className="table-responsive rounded-3 border">
+              <table className="table table-hover align-middle mb-0">
                 <thead className="table-light">
-                  <tr>
-                    <th className="ps-3 py-2 border-0">Bank & Branch</th>
-                    <th className="py-2 border-0">IFSC Code</th>
-                    <th className="text-end pe-3 py-2 border-0">Actions</th>
+                  <tr className="tiny text-uppercase tracking-wider">
+                    <th className="ps-3 py-3 border-0">Branch / Bank</th>
+                    <th className="py-3 border-0">IFSC Code</th>
+                    <th className="text-end pe-3 py-3 border-0">Operations</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.branches.map(branch => {
+                  {filteredBranches.map(branch => {
                     const bank = data.banks.find(b => Number(b.Bank_ID) === Number(branch.Bank_ID));
                     const deletable = isBranchDeletable(Number(branch.Branch_ID));
                     return (
                       <tr key={branch.Branch_ID}>
-                        <td className="ps-3 py-2">
-                          <div className="fw-bold">{branch.Branch_Name}</div>
-                          <div className="text-muted tiny">{bank?.Bank_Name || 'Unlinked'}</div>
+                        <td className="ps-3 py-3">
+                          <div className="fw-bold text-dark small">{branch.Branch_Name}</div>
+                          {selectedBankId === null && <div className="tiny text-muted">{bank?.Bank_Name || 'Unlinked Bank'}</div>}
                         </td>
-                        <td className="py-2">
-                          <code className="text-primary fw-bold">{branch.IFSC_Code}</code>
+                        <td className="py-3">
+                          <code className="bg-light px-2 py-1 rounded text-primary border border-primary-subtle tiny fw-bold">{branch.IFSC_Code}</code>
                         </td>
-                        <td className="text-end pe-3 py-2">
+                        <td className="text-end pe-3">
                           <div className="d-flex gap-1 justify-content-end">
-                            <button 
-                              onClick={() => handleIfscLookup(branch)} 
-                              className="btn btn-sm btn-light text-info border p-1" 
-                              title="Update Name from Web"
-                              disabled={isFetching}
-                            >
-                              <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
-                            </button>
-                            <button onClick={() => setEditingBranch(branch)} className="btn btn-sm btn-light text-primary border p-1"><Edit2 size={14} /></button>
-                            {deletable && <button onClick={() => onDeleteBranch(Number(branch.Branch_ID))} className="btn btn-sm btn-light text-danger border p-1"><Trash2 size={14} /></button>}
+                            <button onClick={() => handleIfscLookup(branch)} className="btn btn-xs btn-light text-info border p-1" title="Sync with Web"><RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} /></button>
+                            <button onClick={() => setEditingBranch(branch)} className="btn btn-xs btn-light text-primary border p-1" title="Edit"><Edit2 size={14} /></button>
+                            {deletable ? (
+                              <button onClick={() => onDeleteBranch(Number(branch.Branch_ID))} className="btn btn-xs btn-light text-danger border p-1" title="Delete"><Trash2 size={14} /></button>
+                            ) : (
+                              <div className="btn btn-xs btn-light text-muted border p-1 opacity-50" title="Locked: Active Employee records detected"><Lock size={14} /></div>
+                            )}
                           </div>
                         </td>
                       </tr>
                     );
                   })}
+                  {filteredBranches.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="text-center py-5">
+                        <div className="mb-3 text-muted opacity-25"><Building size={48} /></div>
+                        <p className="text-muted small">No branch locations found for this selection.</p>
+                        <button onClick={() => setEditingBranch({ Bank_ID: selectedBankId || undefined })} className="btn btn-sm btn-link text-success text-decoration-none fw-bold">
+                          Add the first branch now
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
