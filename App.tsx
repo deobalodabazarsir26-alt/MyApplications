@@ -277,7 +277,7 @@ export default function App() {
       return alert("Cannot delete branch: It is currently assigned to one or more employees.");
     }
     const newBranches = data.branches.filter(b => Number(b.Bank_ID) !== id);
-    performSync('deleteBranch', { Branch_ID: id }, { ...data, branches: newBranches });
+    performSync('deleteBranch', { Bank_ID: id }, { ...data, branches: newBranches });
   };
 
   const upsertPost = (post: Post) => {
@@ -360,6 +360,7 @@ export default function App() {
       ? currentSelections.filter(id => id !== postId)
       : [...currentSelections, postId];
     
+    // Explicitly use numeric key for the local update
     const newMap = { ...data.userPostSelections, [userId]: newSelections };
     performSync('updateUserPostSelections', { User_ID: userId, Post_IDs: newSelections }, { ...data, userPostSelections: newMap });
   };

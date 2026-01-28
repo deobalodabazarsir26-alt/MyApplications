@@ -107,9 +107,6 @@ function upsertRow(ss, sheetName, data) {
   }
 }
 
-/**
- * Robust delete function that finds the ID column by key
- */
 function deleteRow(ss, sheetName, idKey, idValue) {
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) throw new Error("Sheet '" + sheetName + "' not found");
@@ -118,19 +115,16 @@ function deleteRow(ss, sheetName, idKey, idValue) {
   if (data.length < 2) throw new Error("Sheet is empty");
   
   const headers = data[0];
-  // Find column index (case-insensitive search)
   const colIndex = headers.findIndex(h => h.toString().toLowerCase() === idKey.toLowerCase());
-  const searchCol = colIndex >= 0 ? colIndex : 0; // Fallback to first column
+  const searchCol = colIndex >= 0 ? colIndex : 0;
   
   const targetId = idValue.toString().trim();
   let deleted = false;
 
-  // Search from bottom up to avoid index shifts during deletion
   for (let i = data.length - 1; i >= 1; i--) {
     if (data[i][searchCol].toString().trim() == targetId) {
       sheet.deleteRow(i + 1);
       deleted = true;
-      // Continue searching if there might be duplicates, or return if IDs are unique
       return; 
     }
   }
@@ -148,10 +142,13 @@ function getSelectionData(ss) {
   vals.shift();
   const map = {};
   vals.forEach(r => {
-    const uId = r[0];
-    const pId = r[1];
-    if (!map[uId]) map[uId] = [];
-    map[uId].push(pId);
+    // Force string keys to ensure consistency during JSON conversion
+    const uId = r[0].toString().trim();
+    const pId = Number(r[1]);
+    if (!isNaN(pId)) {
+      if (!map[uId]) map[uId] = [];
+      map[uId].push(pId);
+    }
   });
   return map;
 }
@@ -167,14 +164,16 @@ function updateSelections(ss, payload) {
   const postIds = payload.Post_IDs;
   
   const vals = sheet.getDataRange().getValues();
+  // Clear existing mappings for this user
   for (let i = vals.length - 1; i >= 1; i--) {
     if (vals[i][0].toString().trim() == userId) {
       sheet.deleteRow(i + 1);
     }
   }
   
+  // Batch append new mappings
   postIds.forEach(pId => {
-    sheet.appendRow([payload.User_ID, pId]);
+    sheet.appendRow([Number(userId), Number(pId)]);
   });
 }
 ```
