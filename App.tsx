@@ -58,16 +58,25 @@ export default function App() {
     
     const remoteData = await syncService.fetchAllData();
     if (remoteData) {
-      const sanitizeTable = (table: any[]) => {
+      const sanitizeTable = (table: any[], isUserTable = false) => {
         if (!Array.isArray(table)) return [];
         return table.map(item => {
           const newItem = { ...item };
           Object.keys(newItem).forEach(key => {
             const k = key.toLowerCase();
+            
+            // Handle Numeric IDs
             if (k.endsWith('_id') || k === 'ac_no' || k === 'bank_id' || k === 'user_id' || k === 'post_id' || k === 'pay_id' || k === 'department_id' || k === 'office_id' || k === 'branch_id' || k === 'employee_id') {
               if (newItem[key] !== undefined && newItem[key] !== null && newItem[key] !== '') {
                 newItem[key] = Number(newItem[key]);
               }
+            }
+
+            // Normalize User_Type specifically
+            if (isUserTable && (k === 'user_type' || key === 'User_Type')) {
+              const val = newItem[key]?.toString().trim().toLowerCase();
+              if (val === 'admin') newItem[key] = UserType.ADMIN;
+              else if (val === 'normal') newItem[key] = UserType.NORMAL;
             }
           });
           return newItem;
@@ -75,7 +84,7 @@ export default function App() {
       };
 
       const sanitizedData: any = { ...remoteData };
-      sanitizedData.users = sanitizeTable(remoteData.users || []);
+      sanitizedData.users = sanitizeTable(remoteData.users || [], true);
       sanitizedData.departments = sanitizeTable(remoteData.departments || []);
       sanitizedData.offices = sanitizeTable(remoteData.offices || []);
       sanitizedData.banks = sanitizeTable(remoteData.banks || []);
@@ -146,7 +155,6 @@ export default function App() {
     const result = await syncService.saveData(action, payload);
     if (!result.success) {
       setSyncError(`Update failed: ${result.error || 'Connection error'}`);
-      // Rollback to previous known good state from server
       await loadData(false);
     } else {
       setLastSynced(new Date());
@@ -268,7 +276,7 @@ export default function App() {
     if (hasEmployees) {
       return alert("Cannot delete branch: It is currently assigned to one or more employees.");
     }
-    const newBranches = data.branches.filter(b => Number(b.Branch_ID) !== id);
+    const newBranches = data.branches.filter(b => Number(b.Bank_ID) !== id);
     performSync('deleteBranch', { Branch_ID: id }, { ...data, branches: newBranches });
   };
 
