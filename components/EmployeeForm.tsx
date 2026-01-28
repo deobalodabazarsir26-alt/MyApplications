@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Employee, AppData, ServiceType, User, UserType } from '../types';
-import { Save, X, Info, User as UserIcon, Briefcase, Landmark, AlertCircle, Hash, Activity, Search, Loader2 } from 'lucide-react';
+import { Save, X, Info, User as UserIcon, Briefcase, Landmark, AlertCircle, Hash, Activity, Search, Loader2, Power } from 'lucide-react';
 import { ifscService } from '../services/ifscService';
 
 interface EmployeeFormProps {
@@ -63,6 +63,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
     if (!formData.Branch_ID) newErrors.Branch_ID = "Required";
     if (!formData.IFSC_Code) newErrors.IFSC_Code = "Required";
     
+    if (formData.Active === 'No' && !formData.DA_Reason) {
+      newErrors.DA_Reason = "Required for deactivation";
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -103,6 +107,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
     if (name === 'Branch_ID') {
       const branch = (data.branches || []).find(b => Number(b.Branch_ID) === Number(finalValue));
       setFormData(prev => ({ ...prev, [name]: finalValue, IFSC_Code: branch ? branch.IFSC_Code : '' }));
+      return;
+    }
+
+    if (name === 'Active' && finalValue === 'Yes') {
+      setFormData(prev => ({ ...prev, [name]: finalValue, DA_Reason: '' }));
       return;
     }
 
@@ -214,6 +223,31 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
           <label className="form-label small fw-bold">Account Number *</label>
           <input name="ACC_No" value={formData.ACC_No || ''} onChange={handleChange} className="form-control" />
         </div>
+
+        <div className="col-12 mt-5">
+          <div className="d-flex align-items-center gap-2 mb-3 text-primary fw-bold border-start border-4 border-primary ps-3">
+            <Power size={18} /> Status & Lifecycle
+          </div>
+        </div>
+
+        <div className="col-md-4">
+          <label className="form-label small fw-bold">Account Status *</label>
+          <select name="Active" value={formData.Active || 'Yes'} onChange={handleChange} className="form-select">
+            <option value="Yes">Active</option>
+            <option value="No">Inactive</option>
+          </select>
+        </div>
+
+        {formData.Active === 'No' && (
+          <div className="col-md-4">
+            <label className="form-label small fw-bold">Deactivation Reason *</label>
+            <select name="DA_Reason" value={formData.DA_Reason || ''} onChange={handleChange} className={`form-select ${errors.DA_Reason ? 'is-invalid' : ''}`}>
+              <option value="">Select Reason...</option>
+              {DEACTIVATION_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            {errors.DA_Reason && <div className="invalid-feedback">{errors.DA_Reason}</div>}
+          </div>
+        )}
 
         <div className="col-12 text-end mt-5">
           <button type="button" onClick={onCancel} className="btn btn-light px-4 me-2">Cancel</button>

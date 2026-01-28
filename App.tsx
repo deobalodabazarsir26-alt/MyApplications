@@ -339,6 +339,19 @@ export default function App() {
     performSync('deleteEmployee', { Employee_ID: id }, { ...data, employees: newEmployees });
   };
 
+  const toggleEmployeeStatus = (empId: number) => {
+    const employee = data.employees.find(e => Number(e.Employee_ID) === Number(empId));
+    if (!employee) return;
+    
+    const newStatus = employee.Active === 'Yes' ? 'No' : 'Yes';
+    const updatedEmployee: Employee = {
+      ...employee,
+      Active: newStatus,
+      DA_Reason: newStatus === 'No' ? 'Transfer' : '', // Default reason if marking inactive
+    };
+    upsertEmployee(updatedEmployee);
+  };
+
   const togglePostSelection = (postId: number) => {
     if (!currentUser) return;
     const userId = Number(currentUser.User_ID);
@@ -383,6 +396,7 @@ export default function App() {
             onEdit={setEditingEmployee}
             onAddNew={() => setActiveTab('employeeForm')}
             onDelete={deleteEmployee}
+            onToggleStatus={toggleEmployeeStatus}
           />
         );
       case 'managePosts':

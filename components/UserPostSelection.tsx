@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { AppData, User, UserType, Post } from '../types';
-import { Briefcase, X, Plus, Info, CheckCircle2, Search, ArrowRight, Lock } from 'lucide-react';
+import { Briefcase, X, Plus, Info, CheckCircle2, Search, ArrowRight, Lock, Trash2 } from 'lucide-react';
 
 interface UserPostSelectionProps {
   data: AppData;
@@ -22,17 +22,24 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
     return (data.employees || []).filter(emp => Number(emp.Post_ID) === postId).length;
   };
 
-  // Derive the two lists
-  const selectedPosts = (data.posts || []).filter(p => selectedPostIds.includes(Number(p.Post_ID)));
-  const availablePosts = (data.posts || []).filter(p => 
-    !selectedPostIds.includes(Number(p.Post_ID)) &&
-    (searchTerm === '' || p.Post_Name.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Derive the two lists: Selected and Available
+  const selectedPosts = useMemo(() => 
+    (data.posts || []).filter(p => selectedPostIds.includes(Number(p.Post_ID))),
+    [data.posts, selectedPostIds]
+  );
+
+  const availablePosts = useMemo(() => 
+    (data.posts || []).filter(p => 
+      !selectedPostIds.includes(Number(p.Post_ID)) &&
+      (searchTerm === '' || p.Post_Name.toLowerCase().includes(searchTerm.toLowerCase()))
+    ),
+    [data.posts, selectedPostIds, searchTerm]
   );
 
   const handleRemove = (post: Post) => {
     const count = getUsageCount(Number(post.Post_ID));
     if (count > 0) {
-      alert(`Cannot remove "${post.Post_Name}": This designation is currently assigned to ${count} employee(s) in the system. Please update those employee records before removing this designation from your mapping.`);
+      alert(`Cannot remove "${post.Post_Name}": This designation is currently assigned to ${count} employee(s). Please update those employee records first.`);
       return;
     }
     onToggle(Number(post.Post_ID));
@@ -41,22 +48,22 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
   if (isAdmin) {
     return (
       <div className="card shadow-sm border-0 rounded-4 overflow-hidden">
-        <div className="card-header bg-white border-bottom py-3">
-          <div className="d-flex align-items-center gap-2">
-            <div className="bg-primary-subtle p-2 rounded-3 text-primary shadow-sm">
-              <Briefcase size={24} />
+        <div className="card-header bg-white border-bottom py-4 px-4">
+          <div className="d-flex align-items-center gap-3">
+            <div className="bg-primary-subtle p-3 rounded-4 text-primary">
+              <Briefcase size={28} />
             </div>
             <div>
-              <h5 className="mb-0 fw-bold">System Designation Master</h5>
-              <p className="text-muted small mb-0">Full catalog of posts available in the system</p>
+              <h5 className="mb-0 fw-bold">Designation Repository</h5>
+              <p className="text-muted small mb-0">Full catalog of organizational posts and global usage statistics</p>
             </div>
           </div>
         </div>
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0">
             <thead className="table-light">
-              <tr>
-                <th className="ps-4">Post Name</th>
+              <tr className="tiny text-uppercase fw-bold text-muted">
+                <th className="ps-4 py-3">Post Name</th>
                 <th>Category</th>
                 <th className="text-center">Class</th>
                 <th>Global Usage</th>
@@ -68,15 +75,21 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
                 const count = getUsageCount(Number(post.Post_ID));
                 return (
                   <tr key={post.Post_ID}>
-                    <td className="ps-4 fw-semibold">{post.Post_Name}</td>
-                    <td><span className="badge bg-light text-dark border">{post.Category}</span></td>
-                    <td className="text-center"><span className="badge badge-soft-primary px-3">Class {post.Class}</span></td>
-                    <td>
-                      <span className={`small fw-bold ${count > 0 ? 'text-primary' : 'text-muted'}`}>
-                        {count} Employees
-                      </span>
+                    <td className="ps-4 py-3">
+                      <div className="fw-bold text-dark">{post.Post_Name}</div>
+                      <div className="tiny text-muted uppercase">POST ID: #{post.Post_ID}</div>
                     </td>
-                    <td className="text-end pe-4"><span className="text-success small fw-bold">Active</span></td>
+                    <td><span className="badge bg-light text-dark border fw-normal">{post.Category}</span></td>
+                    <td className="text-center"><span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 fw-normal">Class {post.Class}</span></td>
+                    <td>
+                      <div className="d-flex align-items-center gap-2">
+                        <div className="progress flex-grow-1 bg-light" style={{height: '6px', maxWidth: '100px'}}>
+                          <div className="progress-bar bg-primary" style={{width: `${Math.min(count * 5, 100)}%`}}></div>
+                        </div>
+                        <span className="small fw-bold text-primary">{count}</span>
+                      </div>
+                    </td>
+                    <td className="text-end pe-4"><span className="badge bg-success-subtle text-success px-3">Active</span></td>
                   </tr>
                 );
               })}
@@ -88,17 +101,20 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
   }
 
   return (
-    <div className="designation-manager">
-      {/* SECTION 1: SELECTED POSTS BOX */}
+    <div className="designation-manager animate-fade-in">
+      {/* TOP SECTION: SELECTED BOX */}
       <div className="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
-        <div className="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-          <div className="d-flex align-items-center gap-2">
+        <div className="card-header bg-white border-bottom py-4 px-4 d-flex justify-content-between align-items-center">
+          <div className="d-flex align-items-center gap-3">
             <div className="bg-primary-subtle p-2 rounded-3 text-primary shadow-sm">
-              <CheckCircle2 size={20} />
+              <CheckCircle2 size={24} />
             </div>
-            <h6 className="mb-0 fw-bold">My Active Designations ({selectedPosts.length})</h6>
+            <div>
+              <h6 className="mb-0 fw-bold">My Active Designations</h6>
+              <p className="tiny text-muted mb-0">Posts you can currently assign to employees</p>
+            </div>
           </div>
-          <span className="badge bg-primary rounded-pill px-3" style={{fontSize: '0.7rem'}}>CLOUD SYNCED</span>
+          <span className="badge bg-primary rounded-pill px-3 py-2 fw-normal">{selectedPosts.length} Mapped</span>
         </div>
         <div className="card-body bg-light-subtle p-4">
           {selectedPosts.length > 0 ? (
@@ -109,80 +125,66 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
                 
                 return (
                   <div key={post.Post_ID} className="col-12 col-md-6 col-lg-4">
-                    <div className="card border-0 shadow-sm rounded-3 h-100 selection-chip bg-white overflow-hidden">
-                      <div className="card-body p-3 d-flex align-items-center justify-content-between gap-2">
-                        <div className="d-flex align-items-center gap-2 flex-grow-1 min-width-0">
-                          <div className="bg-primary-subtle text-primary rounded-circle p-2 flex-shrink-0 d-flex align-items-center justify-content-center" style={{width: '32px', height: '32px'}}>
-                            <Briefcase size={16} />
+                    <div className="card border-0 shadow-sm rounded-4 h-100 bg-white selection-card">
+                      <div className="card-body p-3 d-flex align-items-center justify-content-between">
+                        <div className="d-flex align-items-center gap-3 min-width-0">
+                          <div className="bg-primary-subtle text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style={{width: '40px', height: '40px'}}>
+                            <Briefcase size={20} />
                           </div>
-                          
                           <div className="min-width-0">
-                            <div className="fw-bold small text-truncate text-dark" title={post.Post_Name}>
-                              {post.Post_Name}
-                            </div>
-                            <div className="text-muted text-truncate d-flex align-items-center gap-1" style={{fontSize: '0.65rem'}}>
-                              Class {post.Class} • {post.Category}
-                              {isLocked && <span className="text-primary fw-bold ms-1">• In Use ({usageCount})</span>}
-                            </div>
+                            <div className="fw-bold text-dark text-truncate" style={{fontSize: '0.9rem'}}>{post.Post_Name}</div>
+                            <div className="tiny text-muted text-truncate uppercase">Class {post.Class} • {post.Category}</div>
                           </div>
                         </div>
-
                         <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemove(post);
-                          }}
-                          className={`btn ${isLocked ? 'btn-light text-muted opacity-50' : 'btn-danger-subtle'} btn-sm rounded-circle p-1 flex-shrink-0 border-0 hover-action-btn shadow-sm ms-2`}
+                          onClick={() => handleRemove(post)}
+                          className={`btn btn-sm rounded-circle p-2 border-0 ms-2 transition-all ${isLocked ? 'btn-light text-muted opacity-50 cursor-not-allowed' : 'btn-danger-subtle text-danger'}`}
                           title={isLocked ? `Locked: Assigned to ${usageCount} employees` : "Remove Designation"}
-                          style={{ 
-                            width: '30px', 
-                            height: '30px', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            position: 'relative',
-                            zIndex: 5
-                          }}
                         >
-                          {isLocked ? <Lock size={14} /> : <X size={16} strokeWidth={3} />}
+                          {isLocked ? <Lock size={14} /> : <Trash2 size={16} />}
                         </button>
                       </div>
+                      {isLocked && (
+                        <div className="bg-primary-subtle px-3 py-1 tiny text-primary fw-bold text-center border-top border-primary-subtle">
+                          Mapped to {usageCount} Employee(s)
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="text-center py-4">
-              <div className="bg-white d-inline-flex p-3 rounded-circle shadow-sm mb-3">
-                <Briefcase size={32} className="text-muted opacity-50" />
+            <div className="text-center py-5">
+              <div className="bg-white d-inline-flex p-4 rounded-circle shadow-sm mb-3">
+                <Briefcase size={40} className="text-muted opacity-25" />
               </div>
               <h6 className="text-muted fw-bold">No Designations Selected</h6>
-              <p className="text-muted small">Choose from the list below to begin building your profile.</p>
+              <p className="text-muted small mx-auto" style={{maxWidth: '300px'}}>Select designations from the list below to enable them for your office records.</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* SECTION 2: ADD MORE POSTS */}
+      {/* BOTTOM SECTION: ADD MORE */}
       <div className="card shadow-sm border-0 rounded-4 overflow-hidden">
-        <div className="card-header bg-white border-bottom py-3">
-          <div className="row align-items-center">
-            <div className="col-12 col-md-6 mb-3 mb-md-0">
-              <div className="d-flex align-items-center gap-2">
+        <div className="card-header bg-white border-bottom py-4 px-4">
+          <div className="row align-items-center g-3">
+            <div className="col-md-6">
+              <div className="d-flex align-items-center gap-3">
                 <div className="bg-success-subtle p-2 rounded-3 text-success shadow-sm">
-                  <Plus size={20} />
+                  <Plus size={24} />
                 </div>
-                <h6 className="mb-0 fw-bold">Add More Designations</h6>
+                <h6 className="mb-0 fw-bold">Add Available Designations</h6>
               </div>
             </div>
-            <div className="col-12 col-md-6">
-              <div className="input-group input-group-sm">
-                <span className="input-group-text bg-light border-end-0 text-muted ps-3"><Search size={14} /></span>
+            <div className="col-md-6">
+              <div className="input-group">
+                <span className="input-group-text bg-light border-end-0 text-muted ps-3"><Search size={18} /></span>
                 <input 
                   type="text" 
                   className="form-control bg-light border-start-0" 
-                  placeholder="Filter available posts..." 
+                  placeholder="Filter designations not in your list..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -191,41 +193,44 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
           </div>
         </div>
         <div className="card-body p-0">
-          <div className="table-responsive" style={{maxHeight: '400px'}}>
+          <div className="table-responsive" style={{maxHeight: '450px'}}>
             <table className="table table-hover align-middle mb-0">
               <thead className="table-light sticky-top" style={{zIndex: 10}}>
-                <tr>
-                  <th className="ps-4 py-3 border-0">Post Name</th>
-                  <th className="border-0">Class</th>
-                  <th className="border-0">Category</th>
-                  <th className="text-end pe-4 border-0">Action</th>
+                <tr className="tiny text-uppercase fw-bold text-muted">
+                  <th className="ps-4 py-3">Designation Name</th>
+                  <th>Classification</th>
+                  <th className="text-end pe-4">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {availablePosts.length > 0 ? (
                   availablePosts.map(post => (
                     <tr key={post.Post_ID}>
-                      <td className="ps-4">
-                        <div className="fw-semibold small">{post.Post_Name}</div>
+                      <td className="ps-4 py-3">
+                        <div className="fw-semibold text-dark">{post.Post_Name}</div>
+                        <div className="tiny text-muted uppercase">{post.Category} Category</div>
                       </td>
-                      <td><span className="badge badge-soft-primary rounded-pill">Class {post.Class}</span></td>
-                      <td><span className="small text-muted">{post.Category}</span></td>
+                      <td><span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 fw-normal">Class {post.Class}</span></td>
                       <td className="text-end pe-4">
                         <button 
                           onClick={() => onToggle(Number(post.Post_ID))}
-                          className="btn btn-sm btn-primary rounded-pill px-3 d-inline-flex align-items-center gap-1 shadow-sm"
+                          className="btn btn-sm btn-primary rounded-pill px-4 d-inline-flex align-items-center gap-2 shadow-sm transition-all"
                         >
-                          <Plus size={14} /> Add <ArrowRight size={12} />
+                          <Plus size={14} /> Add to My List
                         </button>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="text-center py-5">
-                      <p className="text-muted mb-0 small">
-                        {searchTerm ? 'No results for your search.' : 'All designations have been added!'}
-                      </p>
+                    <td colSpan={3} className="text-center py-5">
+                      <div className="text-muted mb-0 small py-4">
+                        {searchTerm ? (
+                          <>No designations found matching "<strong>{searchTerm}</strong>"</>
+                        ) : (
+                          "All available designations have been added to your active list."
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -233,40 +238,25 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
             </table>
           </div>
         </div>
-        <div className="card-footer bg-light py-2 text-center">
-          <div className="small text-muted d-flex align-items-center justify-content-center gap-1">
-            <Info size={14} className="text-primary" />
-            Selection will be saved automatically to <span className="text-primary fw-bold">UserPostSelections</span>
+        <div className="card-footer bg-light-subtle py-3 border-top text-center">
+          <div className="small text-muted d-flex align-items-center justify-content-center gap-2">
+            <Info size={16} className="text-primary" />
+            Selection changes are automatically synced to your profile.
           </div>
         </div>
       </div>
 
       <style>{`
-        .selection-chip { 
-          transition: transform 0.2s, box-shadow 0.2s; 
-          border: 1px solid #edf2f7 !important;
-        }
-        .selection-chip:hover { 
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
-        }
-        .btn-danger-subtle {
-          background-color: #fee2e2;
-          color: #dc2626;
-        }
-        .hover-action-btn:hover {
-          background-color: #ef4444 !important;
-          color: white !important;
-          transform: scale(1.1);
-        }
-        .btn-light.hover-action-btn:hover {
-          background-color: #e2e8f0 !important;
-          color: #475569 !important;
-          transform: none;
-        }
-        .min-width-0 { min-width: 0; }
-        .sticky-top { top: 0; position: sticky; background: white; }
+        .selection-card { transition: all 0.2s ease; border: 1px solid #f1f5f9 !important; }
+        .selection-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important; }
+        .btn-danger-subtle { background-color: #fee2e2; color: #dc2626; }
+        .btn-danger-subtle:hover { background-color: #dc2626; color: white; }
         .bg-light-subtle { background-color: #f8fafc; }
+        .tiny { font-size: 0.7rem; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .min-width-0 { min-width: 0; }
+        .cursor-not-allowed { cursor: not-allowed; }
       `}</style>
     </div>
   );

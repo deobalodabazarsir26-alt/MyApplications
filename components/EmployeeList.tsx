@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Employee, AppData, ServiceType, User, UserType, Department } from '../types';
-import { Search, Plus, Edit2, Filter, ChevronLeft, ChevronRight, XCircle, Briefcase, AlertTriangle, CheckCircle2, Trash2, Layers, Building2, Tag, Activity, ListOrdered, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, Plus, Edit2, Filter, ChevronLeft, ChevronRight, XCircle, Briefcase, AlertTriangle, CheckCircle2, Trash2, Layers, Building2, Tag, Activity, ListOrdered, ChevronUp, ChevronDown, UserMinus, UserPlus } from 'lucide-react';
 
 interface EmployeeListProps {
   employees: Employee[];
@@ -10,9 +10,10 @@ interface EmployeeListProps {
   onEdit: (emp: Employee) => void;
   onAddNew: () => void;
   onDelete: (empId: number) => void;
+  onToggleStatus: (empId: number) => void;
 }
 
-const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUser, onEdit, onAddNew, onDelete }) => {
+const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUser, onEdit, onAddNew, onDelete, onToggleStatus }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [deptTypeFilter, setDeptTypeFilter] = useState<string>(''); 
   const [deptFilter, setDeptFilter] = useState<string>('');
@@ -209,7 +210,9 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
                     {isActive ? (
                       <span className="badge bg-success-subtle text-success rounded-pill px-3">Active</span>
                     ) : (
-                      <span className="badge bg-danger-subtle text-danger rounded-pill px-3">Inactive</span>
+                      <span className="badge bg-danger-subtle text-danger rounded-pill px-3" title={emp.DA_Reason ? `Reason: ${emp.DA_Reason}` : 'Inactive'}>
+                        Inactive {emp.DA_Reason ? `(${emp.DA_Reason})` : ''}
+                      </span>
                     )}
                   </td>
                   <td>
@@ -219,8 +222,15 @@ const EmployeeList: React.FC<EmployeeListProps> = ({ employees, data, currentUse
                   <td><span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2">{post}</span></td>
                   <td className="text-end pe-4">
                     <div className="d-flex gap-2 justify-content-end">
-                      <button onClick={() => onEdit(emp)} className="btn btn-light btn-sm rounded-3 text-primary border shadow-sm"><Edit2 size={16} /></button>
-                      {isAdmin && <button onClick={() => onDelete(emp.Employee_ID)} className="btn btn-outline-danger btn-sm rounded-3 shadow-sm"><Trash2 size={16} /></button>}
+                      <button 
+                        onClick={() => onToggleStatus(emp.Employee_ID)} 
+                        className={`btn btn-sm rounded-3 border shadow-sm ${isActive ? 'btn-light text-warning' : 'btn-light text-success'}`}
+                        title={isActive ? "Mark Inactive" : "Mark Active"}
+                      >
+                        {isActive ? <UserMinus size={16} /> : <UserPlus size={16} />}
+                      </button>
+                      <button onClick={() => onEdit(emp)} className="btn btn-light btn-sm rounded-3 text-primary border shadow-sm" title="Edit Record"><Edit2 size={16} /></button>
+                      {isAdmin && <button onClick={() => onDelete(emp.Employee_ID)} className="btn btn-outline-danger btn-sm rounded-3 shadow-sm" title="Delete Permanent"><Trash2 size={16} /></button>}
                     </div>
                   </td>
                 </tr>
