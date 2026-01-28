@@ -1,4 +1,3 @@
-
 import { AppData } from '../types';
 import { GSHEET_API_URL } from '../constants';
 
@@ -21,15 +20,14 @@ export const syncService = {
     }
   },
 
-  async saveData(action: string, payload: any): Promise<{success: boolean, error?: string}> {
+  async saveData(action: string, payload: any): Promise<{success: boolean, data?: any, error?: string}> {
     if (!GSHEET_API_URL) {
       console.warn('Sync ignored: GSHEET_API_URL is not configured.');
       return { success: true };
     }
     
-    console.log(`Cloud Sync Initiated: [${action}]`, payload);
+    console.log(`Cloud Sync Initiated: [${action}]`);
     
-    // Increased timeout to 90s for large file uploads
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 90000);
 
@@ -43,22 +41,18 @@ export const syncService = {
       clearTimeout(timeoutId);
       
       const responseText = await response.text();
-      console.log(`Raw Server Response [${action}]:`, responseText);
-
       let result;
       try {
         result = JSON.parse(responseText);
       } catch (e) {
-        throw new Error(`Server returned non-JSON: ${responseText.substring(0, 50)}...`);
+        throw new Error(`Server returned invalid response: ${responseText.substring(0, 100)}`);
       }
 
       if (result.status === 'error') {
-        console.error(`Apps Script Logic Error [${action}]:`, result.message);
         return { success: false, error: result.message };
       }
       
-      console.log(`Cloud Sync Success: [${action}]`);
-      return { success: true };
+      return { success: true, data: result.data };
     } catch (error: any) {
       const message = error.name === 'AbortError' ? 'Request timed out' : (error instanceof Error ? error.message : 'Network error');
       console.error(`Cloud Sync Failed: [${action}]`, message);

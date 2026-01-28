@@ -1,12 +1,17 @@
 # Employee Management System (EMS)
 
-## 🛠️ Master Google Apps Script
-Copy this entire block into your **Google Apps Script** editor (**Extensions > Apps Script**). After pasting, click **Deploy > New Deployment**, choose **Web App**, set access to **"Anyone"**, and use the provided URL in your `constants.tsx`.
+## 🛠️ Master Google Apps Script (v2.3)
+Copy this entire block into your **Google Apps Script** editor (**Extensions > Apps Script**). 
+1. Paste the code.
+2. Click **Services (+)** and add the **"Drive API"**.
+3. Click **Deploy > New Deployment**.
+4. Select **Web App**, Execute as **Me**, Access **Anyone**.
+5. Update your `constants.tsx` with the new URL.
 
 ```javascript
 /**
  * MASTER CRUD SCRIPT FOR EMS PRO
- * Version: 2.2 (Robust Drive Uploads)
+ * Version: 2.3 (Bidirectional Sync & Drive Integration)
  */
 
 function doGet() {
@@ -30,15 +35,15 @@ function doPost(e) {
   try {
     const request = JSON.parse(e.postData.contents);
     const action = request.action;
-    const payload = request.payload;
+    let payload = request.payload;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    let result = { status: 'success' };
+    let resultPayload = payload;
 
     if (action.startsWith('upsert')) {
       const entity = action.replace('upsert', '');
       const sheetName = (entity === 'Branch' || entity === 'bank_branchs') ? 'Bank_Branch' : entity;
-      upsertRow(ss, sheetName, payload);
+      resultPayload = upsertRow(ss, sheetName, payload);
     } 
     else if (action.startsWith('delete')) {
       const entity = action.replace('delete', '');
@@ -51,8 +56,11 @@ function doPost(e) {
       updateSelections(ss, payload);
     }
 
-    return ContentService.createTextOutput(JSON.stringify(result))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: 'success', 
+      data: resultPayload 
+    })).setMimeType(ContentService.MimeType.JSON);
+    
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ 
       status: 'error', 
@@ -84,27 +92,21 @@ function upsertRow(ss, sheetName, data) {
   const idKey = headers[0]; 
   const idValue = data[idKey];
 
-  // 1. HANDLE PHOTO UPLOAD
+  // 1. UPLOAD PHOTO
   if (data.photoData && data.photoData.base64) {
     try {
-      const photoUrl = uploadFileToDrive(data.photoData, "EMS_Employee_Photos");
-      data.Photo = photoUrl;
-      console.log("Photo synced to Drive: " + photoUrl);
-    } catch (e) {
-      console.error("Photo upload failed: " + e.toString());
-    }
+      data.Photo = uploadFileToDrive(data.photoData, "EMS_Employee_Photos");
+      console.log("Photo Upload Success: " + data.Photo);
+    } catch (e) { console.error("Photo Error: " + e.toString()); }
     delete data.photoData;
   }
 
-  // 2. HANDLE DOCUMENT UPLOAD
+  // 2. UPLOAD DOCUMENT
   if (data.fileData && data.fileData.base64) {
     try {
-      const docUrl = uploadFileToDrive(data.fileData, "EMS_Deactivation_Docs");
-      data.DA_Doc = docUrl;
-      console.log("Document synced to Drive: " + docUrl);
-    } catch (e) {
-      console.error("Doc upload failed: " + e.toString());
-    }
+      data.DA_Doc = uploadFileToDrive(data.fileData, "EMS_Deactivation_Docs");
+      console.log("Doc Upload Success: " + data.DA_Doc);
+    } catch (e) { console.error("Doc Error: " + e.toString()); }
     delete data.fileData;
   }
   
@@ -121,7 +123,7 @@ function upsertRow(ss, sheetName, data) {
 
   const rowData = headers.map(h => {
     const val = data[h];
-    return val === undefined || val === null ? "" : val;
+    return (val === undefined || val === null) ? "" : val;
   });
 
   if (rowIndex > 0) {
@@ -129,6 +131,8 @@ function upsertRow(ss, sheetName, data) {
   } else {
     sheet.appendRow(rowData);
   }
+  
+  return data; // Return updated object with new URLs
 }
 
 function uploadFileToDrive(fileData, folderName) {
@@ -138,22 +142,19 @@ function uploadFileToDrive(fileData, folderName) {
     folder = folders.next();
   } else {
     folder = DriveApp.createFolder(folderName);
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   }
 
   const decoded = Utilities.base64Decode(fileData.base64);
   const blob = Utilities.newBlob(decoded, fileData.mimeType, fileData.name);
   const file = folder.createFile(blob);
   
-  // Critical: Allow anyone to view so the web app can display it
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  
   const fileId = file.getId();
   
-  // Return direct thumbnail link for images to avoid Drive Viewer wrapping
   if (fileData.mimeType.indexOf('image') !== -1) {
     return "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1000";
   }
-  
   return file.getUrl();
 }
 
