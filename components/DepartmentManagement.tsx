@@ -24,11 +24,21 @@ const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ data, onSav
     return (dept.Department_Type || dept.Dept_Type || dept.department_type || '').trim();
   };
 
+  const departmentTypes = useMemo(() => {
+    const types = new Set<string>();
+    data.departments.forEach(d => {
+      const type = getDeptType(d);
+      if (type) types.add(type);
+    });
+    return Array.from(types).sort();
+  }, [data.departments]);
+
   const filteredDepartments = useMemo(() => {
     let results = data.departments.filter(dept => {
       const matchesType = !deptTypeFilter || getDeptType(dept) === deptTypeFilter;
       const matchesSearch = !searchTerm || 
         dept.Department_Name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getDeptType(dept).toLowerCase().includes(searchTerm.toLowerCase()) ||
         dept.Department_ID.toString().includes(searchTerm);
       return matchesType && matchesSearch;
     });
@@ -90,36 +100,51 @@ const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ data, onSav
             <div className="bg-info-subtle p-2 rounded-3 text-info"><Layers size={24} /></div>
             <div>
               <h5 className="mb-0 fw-bold">Department Master</h5>
-              <p className="text-muted small mb-0">Manage organizations</p>
+              <p className="text-muted small mb-0">Manage organizational departments and classifications</p>
             </div>
           </div>
-          <button onClick={() => setEditingDept({})} className="btn btn-primary px-4 shadow-sm"><Plus size={18} className="me-2" /> Add Dept</button>
+          <button onClick={() => setEditingDept({})} className="btn btn-primary px-4 shadow-sm d-flex align-items-center gap-2">
+            <Plus size={18} /> Add Dept
+          </button>
         </div>
 
         <div className="row g-3">
-          <div className="col-md-6">
+          <div className="col-md-5">
             <div className="input-group shadow-sm">
-              <span className="input-group-text bg-white border-end-0 ps-3"><Search size={16} /></span>
-              <input type="text" className="form-control border-start-0" placeholder="Search departments..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <span className="input-group-text bg-white border-end-0 ps-3 text-muted"><Search size={16} /></span>
+              <input type="text" className="form-control border-start-0" placeholder="Search by name or type..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           </div>
+          <div className="col-md-4">
+            <select className="form-select shadow-sm" value={deptTypeFilter} onChange={(e) => setDeptTypeFilter(e.target.value)}>
+              <option value="">All Dept Types</option>
+              {departmentTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </div>
           <div className="col-md-3">
-            <button onClick={() => { setSearchTerm(''); setDeptTypeFilter(''); }} className="btn btn-outline-secondary w-100 shadow-sm border-2 fw-semibold">Reset</button>
+            <button onClick={() => { setSearchTerm(''); setDeptTypeFilter(''); }} className="btn btn-outline-secondary w-100 shadow-sm border-2 fw-semibold">Reset Filters</button>
           </div>
         </div>
       </div>
 
       <div className="card-body p-0">
         {editingDept && (
-          <div className="bg-light p-4 border-bottom">
+          <div className="bg-light p-4 border-bottom animate-fade-in shadow-inner">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h6 className="fw-bold mb-0 text-primary">{editingDept.Department_ID ? 'Edit Department' : 'New Department'}</h6>
+              <button type="button" onClick={() => setEditingDept(null)} className="btn btn-sm btn-link text-muted p-0"><X size={20} /></button>
+            </div>
             <form onSubmit={handleSubmit} className="row g-3">
               <div className="col-md-6">
-                <label className="form-label small fw-bold">Name</label>
-                <input required value={editingDept.Department_Name || ''} onChange={e => setEditingDept({...editingDept, Department_Name: e.target.value})} className="form-control" />
+                <label className="form-label small fw-bold">Department Name *</label>
+                <input required value={editingDept.Department_Name || ''} onChange={e => setEditingDept({...editingDept, Department_Name: e.target.value})} className="form-control" placeholder="e.g. Higher Education" />
               </div>
-              <div className="col-md-4 text-end d-flex align-items-end justify-content-end">
-                <button type="button" onClick={() => setEditingDept(null)} className="btn btn-light me-2">Cancel</button>
-                <button type="submit" className="btn btn-primary px-4"><Save size={18} className="me-2" /> Save</button>
+              <div className="col-md-4">
+                <label className="form-label small fw-bold">Department Type</label>
+                <input value={editingDept.Department_Type || ''} onChange={e => setEditingDept({...editingDept, Department_Type: e.target.value})} className="form-control" placeholder="e.g. State, Central, Autonomous" />
+              </div>
+              <div className="col-md-2 d-flex align-items-end">
+                <button type="submit" className="btn btn-primary w-100 shadow-sm"><Save size={18} className="me-2" /> Save</button>
               </div>
             </form>
           </div>
@@ -135,6 +160,9 @@ const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ data, onSav
                 <th className="cursor-pointer" onClick={() => requestSort('Department_Name')}>
                   <div className="d-flex align-items-center gap-1">Department Name {getSortIcon('Department_Name')}</div>
                 </th>
+                <th className="cursor-pointer" onClick={() => requestSort('Department_Type')}>
+                  <div className="d-flex align-items-center gap-1">Type {getSortIcon('Department_Type')}</div>
+                </th>
                 <th className="text-end pe-4">Actions</th>
               </tr>
             </thead>
@@ -143,18 +171,30 @@ const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ data, onSav
                 <tr key={dept.Department_ID}>
                   <td className="ps-4 text-muted">#{dept.Department_ID}</td>
                   <td className="fw-semibold">{dept.Department_Name}</td>
+                  <td>
+                    {getDeptType(dept) ? (
+                      <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 fw-normal">
+                        {getDeptType(dept)}
+                      </span>
+                    ) : (
+                      <span className="text-muted small">Not Specified</span>
+                    )}
+                  </td>
                   <td className="text-end pe-4">
                     <div className="d-flex gap-2 justify-content-end">
                       <button onClick={() => setEditingDept(dept)} className="btn btn-light btn-sm rounded-3 border text-primary shadow-sm"><Edit2 size={16} /></button>
                       {isDeletable(Number(dept.Department_ID)) ? (
                         <button onClick={() => onDeleteDepartment(Number(dept.Department_ID))} className="btn btn-light btn-sm rounded-3 border text-danger shadow-sm"><Trash2 size={16} /></button>
                       ) : (
-                        <button className="btn btn-light btn-sm rounded-3 border text-muted opacity-50" disabled><Lock size={16} /></button>
+                        <button className="btn btn-light btn-sm rounded-3 border text-muted opacity-50" title="Locked: Assigned to offices" disabled><Lock size={16} /></button>
                       )}
                     </div>
                   </td>
                 </tr>
               ))}
+              {paginatedItems.length === 0 && (
+                <tr><td colSpan={4} className="text-center py-5 text-muted">No departments found.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -186,6 +226,12 @@ const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ data, onSav
           </nav>
         )}
       </div>
+      <style>{`
+        .cursor-pointer { cursor: pointer; user-select: none; }
+        .cursor-pointer:hover { background-color: #f8fafc; }
+        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
     </div>
   );
 };
