@@ -68,7 +68,7 @@ export default function App() {
             // Handle Numeric IDs
             if (k.endsWith('_id') || k === 'ac_no' || k === 'bank_id' || k === 'user_id' || k === 'post_id' || k === 'pay_id' || k === 'department_id' || k === 'office_id' || k === 'branch_id' || k === 'employee_id') {
               if (newItem[key] !== undefined && newItem[key] !== null && newItem[key] !== '') {
-                newItem[key] = Number(newItem[key]);
+                newItem[key] = Math.floor(Number(newItem[key]));
               }
             }
 
@@ -98,11 +98,12 @@ export default function App() {
       const sanitizedSelections: Record<number, number[]> = {};
       
       Object.keys(rawSelections).forEach(key => {
-        const numericKey = Number(key);
+        // Parse the key carefully to handle floating point strings like "1.0"
+        const numericKey = Math.floor(Number(key));
         if (!isNaN(numericKey)) {
           const val = rawSelections[key];
           sanitizedSelections[numericKey] = Array.isArray(val) 
-            ? val.map(v => Number(v)).filter(v => !isNaN(v)) 
+            ? val.map(v => Math.floor(Number(v))).filter(v => !isNaN(v)) 
             : [];
         }
       });
@@ -136,9 +137,9 @@ export default function App() {
     const employees = data.employees || [];
     if (currentUser.User_Type === UserType.ADMIN) return employees;
     const userOfficeIds = (data.offices || [])
-      .filter(o => Number(o.User_ID) === Number(currentUser.User_ID))
-      .map(o => Number(o.Office_ID));
-    return employees.filter(e => userOfficeIds.includes(Number(e.Office_ID)));
+      .filter(o => Math.floor(Number(o.User_ID)) === Math.floor(Number(currentUser.User_ID)))
+      .map(o => Math.floor(Number(o.Office_ID)));
+    return employees.filter(e => userOfficeIds.includes(Math.floor(Number(e.Office_ID))));
   }, [currentUser, data.employees, data.offices]);
 
   const performSync = async (action: string, payload: any, newState: AppData) => {
@@ -167,91 +168,91 @@ export default function App() {
   const upsertUser = (user: User) => {
     const now = new Date().toLocaleString();
     const users = data.users || [];
-    const exists = users.find(u => Number(u.User_ID) === Number(user.User_ID));
+    const exists = users.find(u => Math.floor(Number(u.User_ID)) === Math.floor(Number(user.User_ID)));
     const finalUser = exists 
       ? { ...user, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...user, User_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newUsers = exists 
-      ? users.map(u => Number(u.User_ID) === Number(user.User_ID) ? finalUser : u)
+      ? users.map(u => Math.floor(Number(u.User_ID)) === Math.floor(Number(user.User_ID)) ? finalUser : u)
       : [...users, finalUser];
     performSync('upsertUser', finalUser, { ...data, users: newUsers });
   };
 
   const deleteUser = (userId: number) => {
-    const id = Number(userId);
-    const hasOffices = data.offices.some(o => Number(o.User_ID) === id);
+    const id = Math.floor(Number(userId));
+    const hasOffices = data.offices.some(o => Math.floor(Number(o.User_ID)) === id);
     if (hasOffices) return alert("User is active custodian for offices.");
-    const newUsers = data.users.filter(u => Number(u.User_ID) !== id);
+    const newUsers = data.users.filter(u => Math.floor(Number(u.User_ID)) !== id);
     performSync('deleteUser', { User_ID: id }, { ...data, users: newUsers });
   };
 
   const upsertDepartment = (dept: Department) => {
     const now = new Date().toLocaleString();
-    const exists = data.departments.find(d => Number(d.Department_ID) === Number(dept.Department_ID));
+    const exists = data.departments.find(d => Math.floor(Number(d.Department_ID)) === Math.floor(Number(dept.Department_ID)));
     const finalDept = exists
       ? { ...dept, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...dept, Department_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newDepts = exists
-      ? data.departments.map(d => Number(d.Department_ID) === Number(dept.Department_ID) ? finalDept : d)
+      ? data.departments.map(d => Math.floor(Number(d.Department_ID)) === Math.floor(Number(dept.Department_ID)) ? finalDept : d)
       : [...data.departments, finalDept];
     performSync('upsertDepartment', finalDept, { ...data, departments: newDepts });
   };
 
   const deleteDepartment = (deptId: number) => {
-    const id = Number(deptId);
-    const newDepts = data.departments.filter(d => Number(d.Department_ID) !== id);
+    const id = Math.floor(Number(deptId));
+    const newDepts = data.departments.filter(d => Math.floor(Number(d.Department_ID)) !== id);
     performSync('deleteDepartment', { Department_ID: id }, { ...data, departments: newDepts });
   };
 
   const upsertOffice = (office: Office) => {
     const now = new Date().toLocaleString();
-    const exists = data.offices.find(o => Number(o.Office_ID) === Number(office.Office_ID));
+    const exists = data.offices.find(o => Math.floor(Number(o.Office_ID)) === Math.floor(Number(office.Office_ID)));
     const finalOffice = exists
       ? { ...office, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...office, Office_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newOffices = exists
-      ? data.offices.map(o => Number(o.Office_ID) === Number(office.Office_ID) ? finalOffice : o)
+      ? data.offices.map(o => Math.floor(Number(o.Office_ID)) === Math.floor(Number(office.Office_ID)) ? finalOffice : o)
       : [...data.offices, finalOffice];
     performSync('upsertOffice', finalOffice, { ...data, offices: newOffices });
   };
 
   const deleteOffice = (officeId: number) => {
-    const id = Number(officeId);
-    const newOffices = data.offices.filter(o => Number(o.Office_ID) !== id);
+    const id = Math.floor(Number(officeId));
+    const newOffices = data.offices.filter(o => Math.floor(Number(o.Office_ID)) !== id);
     performSync('deleteOffice', { Office_ID: id }, { ...data, offices: newOffices });
   };
 
   const upsertBank = (bank: Bank) => {
     const now = new Date().toLocaleString();
-    const exists = data.banks.find(b => Number(b.Bank_ID) === Number(bank.Bank_ID));
+    const exists = data.banks.find(b => Math.floor(Number(b.Bank_ID)) === Math.floor(Number(bank.Bank_ID)));
     const finalBank = exists
       ? { ...bank, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...bank, Bank_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newBanks = exists
-      ? data.banks.map(b => Number(b.Bank_ID) === Number(bank.Bank_ID) ? finalBank : b)
+      ? data.banks.map(b => Math.floor(Number(b.Bank_ID)) === Math.floor(Number(bank.Bank_ID)) ? finalBank : b)
       : [...data.banks, finalBank];
     performSync('upsertBank', finalBank, { ...data, banks: newBanks });
   };
 
   const deleteBank = (bankId: number) => {
-    const id = Number(bankId);
-    const hasBranches = (data.branches || []).some(b => Number(b.Bank_ID) === id);
-    const hasEmployees = (data.employees || []).some(e => Number(e.Bank_ID) === id);
+    const id = Math.floor(Number(bankId));
+    const hasBranches = (data.branches || []).some(b => Math.floor(Number(b.Bank_ID)) === id);
+    const hasEmployees = (data.employees || []).some(e => Math.floor(Number(e.Bank_ID)) === id);
     if (hasBranches || hasEmployees) {
       return alert("Cannot delete bank: It has registered branches or assigned employees.");
     }
-    const newBanks = data.banks.filter(b => Number(b.Bank_ID) !== id);
+    const newBanks = data.banks.filter(b => Math.floor(Number(b.Bank_ID)) !== id);
     performSync('deleteBank', { Bank_ID: id }, { ...data, banks: newBanks });
   };
 
   const upsertBranch = (branch: BankBranch) => {
     const now = new Date().toLocaleString();
-    const exists = data.branches.find(b => Number(b.Branch_ID) === Number(branch.Branch_ID));
+    const exists = data.branches.find(b => Math.floor(Number(b.Branch_ID)) === Math.floor(Number(branch.Branch_ID)));
     const finalBranch = exists
       ? { ...branch, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...branch, Branch_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newBranches = exists
-      ? data.branches.map(b => Number(b.Branch_ID) === Number(branch.Branch_ID) ? finalBranch : b)
+      ? data.branches.map(b => Math.floor(Number(b.Branch_ID)) === Math.floor(Number(branch.Branch_ID)) ? finalBranch : b)
       : [...data.branches, finalBranch];
     performSync('upsertBranch', finalBranch, { ...data, branches: newBranches });
   };
@@ -261,7 +262,7 @@ export default function App() {
     const newBranches = [...data.branches];
     
     branches.forEach(branch => {
-      const idx = newBranches.findIndex(b => Number(b.Branch_ID) === Number(branch.Branch_ID));
+      const idx = newBranches.findIndex(b => Math.floor(Number(b.Branch_ID)) === Math.floor(Number(branch.Branch_ID)));
       if (idx !== -1) {
         newBranches[idx] = { ...branch, T_STMP_UPD: now };
       }
@@ -271,61 +272,61 @@ export default function App() {
   };
 
   const deleteBranch = (branchId: number) => {
-    const id = Number(branchId);
-    const hasEmployees = (data.employees || []).some(e => Number(e.Branch_ID) === id);
+    const id = Math.floor(Number(branchId));
+    const hasEmployees = (data.employees || []).some(e => Math.floor(Number(e.Branch_ID)) === id);
     if (hasEmployees) {
       return alert("Cannot delete branch: It is currently assigned to one or more employees.");
     }
-    const newBranches = data.branches.filter(b => Number(b.Bank_ID) !== id);
-    performSync('deleteBranch', { Bank_ID: id }, { ...data, branches: newBranches });
+    const newBranches = data.branches.filter(b => Math.floor(Number(b.Branch_ID)) !== id);
+    performSync('deleteBranch', { Branch_ID: id }, { ...data, branches: newBranches });
   };
 
   const upsertPost = (post: Post) => {
     const now = new Date().toLocaleString();
-    const exists = data.posts.find(p => Number(p.Post_ID) === Number(post.Post_ID));
+    const exists = data.posts.find(p => Math.floor(Number(p.Post_ID)) === Math.floor(Number(post.Post_ID)));
     const finalPost = exists
       ? { ...post, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...post, Post_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newPosts = exists
-      ? data.posts.map(p => Number(p.Post_ID) === Number(post.Post_ID) ? finalPost : p)
+      ? data.posts.map(p => Math.floor(Number(p.Post_ID)) === Math.floor(Number(post.Post_ID)) ? finalPost : p)
       : [...data.posts, finalPost];
     performSync('upsertPost', finalPost, { ...data, posts: newPosts });
   };
 
   const deletePost = (postId: number) => {
-    const id = Number(postId);
-    const newPosts = data.posts.filter(p => Number(p.Post_ID) !== id);
+    const id = Math.floor(Number(postId));
+    const newPosts = data.posts.filter(p => Math.floor(Number(p.Post_ID)) !== id);
     performSync('deletePost', { Post_ID: id }, { ...data, posts: newPosts });
   };
 
   const upsertPayscale = (pay: Payscale) => {
     const now = new Date().toLocaleString();
-    const exists = data.payscales.find(p => Number(p.Pay_ID) === Number(pay.Pay_ID));
+    const exists = data.payscales.find(p => Math.floor(Number(p.Pay_ID)) === Math.floor(Number(pay.Pay_ID)));
     const finalPay = exists
       ? { ...pay, T_STMP_ADD: exists.T_STMP_ADD, T_STMP_UPD: now }
       : { ...pay, Pay_ID: generateUniqueId(), T_STMP_ADD: now, T_STMP_UPD: now };
     const newPays = exists
-      ? data.payscales.map(p => Number(p.Pay_ID) === Number(pay.Pay_ID) ? finalPay : p)
+      ? data.payscales.map(p => Math.floor(Number(p.Pay_ID)) === Math.floor(Number(pay.Pay_ID)) ? finalPay : p)
       : [...data.payscales, finalPay];
     performSync('upsertPayscale', finalPay, { ...data, payscales: newPays });
   };
 
   const deletePayscale = (payId: number) => {
-    const id = Number(payId);
-    const newPays = data.payscales.filter(p => Number(p.Pay_ID) !== id);
+    const id = Math.floor(Number(payId));
+    const newPays = data.payscales.filter(p => Math.floor(Number(p.Pay_ID)) !== id);
     performSync('deletePayscale', { Pay_ID: id }, { ...data, payscales: newPays });
   };
 
   const upsertEmployee = (employee: Employee) => {
     const now = new Date().toLocaleString();
-    const exists = data.employees.find(e => Number(e.Employee_ID) === Number(employee.Employee_ID));
+    const exists = data.employees.find(e => Math.floor(Number(e.Employee_ID)) === Math.floor(Number(employee.Employee_ID)));
     const finalEmployee = {
       ...employee,
       T_STMP_ADD: exists ? exists.T_STMP_ADD : now,
       T_STMP_UPD: now
     };
     const newEmployees = exists
-      ? data.employees.map(e => Number(e.Employee_ID) === Number(employee.Employee_ID) ? finalEmployee : e)
+      ? data.employees.map(e => Math.floor(Number(e.Employee_ID)) === Math.floor(Number(employee.Employee_ID)) ? finalEmployee : e)
       : [...data.employees, finalEmployee];
     
     performSync('upsertEmployee', finalEmployee, { ...data, employees: newEmployees });
@@ -334,33 +335,32 @@ export default function App() {
   };
 
   const deleteEmployee = (empId: number) => {
-    const id = Number(empId);
-    const newEmployees = data.employees.filter(e => Number(e.Employee_ID) !== id);
+    const id = Math.floor(Number(empId));
+    const newEmployees = data.employees.filter(e => Math.floor(Number(e.Employee_ID)) !== id);
     performSync('deleteEmployee', { Employee_ID: id }, { ...data, employees: newEmployees });
   };
 
   const toggleEmployeeStatus = (empId: number) => {
-    const employee = data.employees.find(e => Number(e.Employee_ID) === Number(empId));
+    const employee = data.employees.find(e => Math.floor(Number(e.Employee_ID)) === Math.floor(Number(empId)));
     if (!employee) return;
     
     const newStatus = employee.Active === 'Yes' ? 'No' : 'Yes';
     const updatedEmployee: Employee = {
       ...employee,
       Active: newStatus,
-      DA_Reason: newStatus === 'No' ? 'Transfer' : '', // Default reason if marking inactive
+      DA_Reason: newStatus === 'No' ? 'Transfer' : '',
     };
     upsertEmployee(updatedEmployee);
   };
 
   const togglePostSelection = (postId: number) => {
     if (!currentUser) return;
-    const userId = Number(currentUser.User_ID);
+    const userId = Math.floor(Number(currentUser.User_ID));
     const currentSelections = data.userPostSelections[userId] || [];
     const newSelections = currentSelections.includes(postId)
       ? currentSelections.filter(id => id !== postId)
       : [...currentSelections, postId];
     
-    // Explicitly use numeric key for the local update
     const newMap = { ...data.userPostSelections, [userId]: newSelections };
     performSync('updateUserPostSelections', { User_ID: userId, Post_IDs: newSelections }, { ...data, userPostSelections: newMap });
   };

@@ -35,13 +35,11 @@ function doPost(e) {
     
     let result = { status: 'success' };
 
-    // Handle Upserts (Add/Update)
     if (action.startsWith('upsert')) {
       const entity = action.replace('upsert', '');
       const sheetName = entity === 'Branch' ? 'Bank_Branch' : entity;
       upsertRow(ss, sheetName, payload);
     } 
-    // Handle Deletions
     else if (action.startsWith('delete')) {
       const entity = action.replace('delete', '');
       const sheetName = entity === 'Branch' ? 'Bank_Branch' : entity;
@@ -49,7 +47,6 @@ function doPost(e) {
       const idValue = payload[idKey];
       deleteRow(ss, sheetName, idKey, idValue);
     }
-    // Special Handlers
     else if (action === 'updateUserPostSelections') {
       updateSelections(ss, payload);
     }
@@ -87,7 +84,7 @@ function upsertRow(ss, sheetName, data) {
   if (!sheet) throw new Error("Sheet '" + sheetName + "' not found");
   
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const idKey = headers[0]; // Assuming first column is always ID
+  const idKey = headers[0];
   const idValue = data[idKey];
   
   const vals = sheet.getDataRange().getValues();
@@ -109,28 +106,17 @@ function upsertRow(ss, sheetName, data) {
 
 function deleteRow(ss, sheetName, idKey, idValue) {
   const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) throw new Error("Sheet '" + sheetName + "' not found");
-  
   const data = sheet.getDataRange().getValues();
-  if (data.length < 2) throw new Error("Sheet is empty");
-  
   const headers = data[0];
   const colIndex = headers.findIndex(h => h.toString().toLowerCase() === idKey.toLowerCase());
   const searchCol = colIndex >= 0 ? colIndex : 0;
-  
   const targetId = idValue.toString().trim();
-  let deleted = false;
 
   for (let i = data.length - 1; i >= 1; i--) {
     if (data[i][searchCol].toString().trim() == targetId) {
       sheet.deleteRow(i + 1);
-      deleted = true;
       return; 
     }
-  }
-  
-  if (!deleted) {
-    throw new Error("Record with " + idKey + " [" + idValue + "] not found in " + sheetName);
   }
 }
 
@@ -140,16 +126,42 @@ function getSelectionData(ss) {
   const vals = sheet.getDataRange().getValues();
   if (vals.length < 2) return {};
   vals.shift();
+  
   const map = {};
   vals.forEach(r => {
-    // Force string keys to ensure consistency during JSON conversion
-    const uId = r[0].toString().trim();
-    const pId = Number(r[1]);
+    // Normalize User_ID (remove .0 decimals if any)
+    const rawUid = r[0].toString().trim();
+    const uId = rawUid.includes('.') ? Math.floor(parseFloat(rawUid)).toString() : rawUid;
+    
+    if (!map[uId]) map[uId] = [];
+    
+    const pVal = r[1].toString().trim();
+    
+    // Check if cell contains a JSON array string e.g., "[2350, 4083]"
+    if (pVal.startsWith('[') && pVal.endsWith(']')) {
+      try {
+        const arr = JSON.parse(pVal);
+        if (Array.isArray(arr)) {
+          arr.forEach(id => {
+            const nid = parseInt(id);
+            if (!isNaN(nid)) map[uId].push(nid);
+          });
+          return;
+        }
+      } catch(e) { /* fallback to standard */ }
+    }
+
+    const pId = parseInt(pVal);
     if (!isNaN(pId)) {
-      if (!map[uId]) map[uId] = [];
       map[uId].push(pId);
     }
   });
+  
+  // Clean duplicates
+  Object.keys(map).forEach(key => {
+    map[key] = [...new Set(map[key])];
+  });
+  
   return map;
 }
 
@@ -160,20 +172,25 @@ function updateSelections(ss, payload) {
     sheet.appendRow(['User_ID', 'Post_ID']);
   }
   
-  const userId = payload.User_ID.toString().trim();
+  const rawUid = payload.User_ID.toString().trim();
+  const userId = rawUid.includes('.') ? Math.floor(parseFloat(rawUid)).toString() : rawUid;
   const postIds = payload.Post_IDs;
   
   const vals = sheet.getDataRange().getValues();
-  // Clear existing mappings for this user
+  // Delete existing individual rows for this user
   for (let i = vals.length - 1; i >= 1; i--) {
-    if (vals[i][0].toString().trim() == userId) {
+    const rowUid = vals[i][0].toString().trim();
+    const cleanRowUid = rowUid.includes('.') ? Math.floor(parseFloat(rowUid)).toString() : rowUid;
+    if (cleanRowUid == userId) {
       sheet.deleteRow(i + 1);
     }
   }
   
-  // Batch append new mappings
-  postIds.forEach(pId => {
-    sheet.appendRow([Number(userId), Number(pId)]);
-  });
+  // Append as separate rows for standard compatibility
+  if (Array.isArray(postIds)) {
+    postIds.forEach(pId => {
+      sheet.appendRow([parseInt(userId), parseInt(pId)]);
+    });
+  }
 }
 ```

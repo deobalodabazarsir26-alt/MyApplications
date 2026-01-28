@@ -12,33 +12,40 @@ interface UserPostSelectionProps {
 const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser, onToggle }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const isAdmin = currentUser.User_Type === UserType.ADMIN;
-  const currentUserId = Number(currentUser.User_ID);
+  
+  // Use Math.floor to strictly normalize the ID to integer
+  const currentUserId = Math.floor(Number(currentUser.User_ID));
 
-  // Robustly extract selections for the current user using strictly numeric lookup
+  // Robustly extract selections for the current user using multiple lookup fallbacks
   const selectedPostIds = useMemo(() => {
     const selections = data.userPostSelections || {};
-    const userSelections = selections[currentUserId];
+    
+    // Attempt lookup using numeric key, then numeric string, then potential decimal string
+    const userSelections = 
+      selections[currentUserId] || 
+      selections[currentUserId.toString()] || 
+      selections[`${currentUserId}.0`];
     
     if (Array.isArray(userSelections)) {
-      return userSelections.map(id => Number(id));
+      return userSelections.map(id => Math.floor(Number(id)));
     }
     return [];
   }, [data.userPostSelections, currentUserId]);
 
   // Helper to check if a post is in use by any employee
   const getUsageCount = (postId: number) => {
-    return (data.employees || []).filter(emp => Number(emp.Post_ID) === Number(postId)).length;
+    return (data.employees || []).filter(emp => Math.floor(Number(emp.Post_ID)) === Math.floor(Number(postId))).length;
   };
 
   // Derive the two lists: Selected and Available
   const selectedPosts = useMemo(() => 
-    (data.posts || []).filter(p => selectedPostIds.includes(Number(p.Post_ID))),
+    (data.posts || []).filter(p => selectedPostIds.includes(Math.floor(Number(p.Post_ID)))),
     [data.posts, selectedPostIds]
   );
 
   const availablePosts = useMemo(() => 
     (data.posts || []).filter(p => {
-      const isAlreadySelected = selectedPostIds.includes(Number(p.Post_ID));
+      const isAlreadySelected = selectedPostIds.includes(Math.floor(Number(p.Post_ID)));
       const matchesSearch = searchTerm === '' || p.Post_Name.toLowerCase().includes(searchTerm.toLowerCase());
       return !isAlreadySelected && matchesSearch;
     }),
@@ -46,7 +53,7 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
   );
 
   const handleRemove = (post: Post) => {
-    const postId = Number(post.Post_ID);
+    const postId = Math.floor(Number(post.Post_ID));
     const count = getUsageCount(postId);
     if (count > 0) {
       alert(`Access Denied: The designation "${post.Post_Name}" is currently linked to ${count} active employee records. Unlink them first to remove this mapping.`);
@@ -82,7 +89,7 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
             </thead>
             <tbody>
               {data.posts.map(post => {
-                const count = getUsageCount(Number(post.Post_ID));
+                const count = getUsageCount(Math.floor(Number(post.Post_ID)));
                 return (
                   <tr key={post.Post_ID}>
                     <td className="ps-4 py-3">
@@ -132,7 +139,7 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
           {selectedPosts.length > 0 ? (
             <div className="row g-3">
               {selectedPosts.map(post => {
-                const usageCount = getUsageCount(Number(post.Post_ID));
+                const usageCount = getUsageCount(Math.floor(Number(post.Post_ID)));
                 const isLocked = usageCount > 0;
                 
                 return (
@@ -225,7 +232,7 @@ const UserPostSelection: React.FC<UserPostSelectionProps> = ({ data, currentUser
                       <td><span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1 fw-normal">Class {post.Class}</span></td>
                       <td className="text-end pe-4">
                         <button 
-                          onClick={() => onToggle(Number(post.Post_ID))}
+                          onClick={() => onToggle(Math.floor(Number(post.Post_ID)))}
                           className="btn btn-sm btn-primary rounded-pill px-4 d-inline-flex align-items-center gap-2 shadow-sm transition-all"
                         >
                           <Plus size={14} /> Map Post
