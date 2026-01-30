@@ -1,7 +1,7 @@
 
 # Employee Management System (EMS)
 
-## 🛠️ Master Google Apps Script (v3.5) - Finalization Module & Robust CRUD
+## 🛠️ Master Google Apps Script (v3.6) - Finalization & Batch Operations
 
 ### ⚠️ MANDATORY: Spreadsheet Setup
 Before deploying the script, you **MUST** add a new column to your Google Sheet:
@@ -41,10 +41,11 @@ Ensure this is enabled in **Project Settings**.
 ```
 
 ### 2. The Code (`Code.gs`)
+**Copy this into your script project and Deploy as Web App.**
 ```javascript
 /**
  * MASTER CRUD SCRIPT FOR EMS PRO
- * Version: 3.5 (Finalization Module & Case-Insensitive Mapping)
+ * Version: 3.6 (Batch Support & Case-Insensitive Mapping)
  */
 
 const FOLDER_ID_PHOTOS = "1nohdez9u46-OmM6im7hD7OjGJhuHfKZm";
@@ -75,11 +76,20 @@ function doPost(e) {
     let payload = request.payload;
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
+    // Support for singular upsert
     if (action.startsWith('upsert')) {
       const entity = action.replace('upsert', '');
       const sheetName = (entity === 'Branch' || entity === 'bank_branchs') ? 'Bank_Branch' : entity;
       payload = upsertRow(ss, sheetName, payload);
     } 
+    // Support for batch upsert (Finalize All / De-Finalize All)
+    else if (action.startsWith('batchUpsert')) {
+      const entity = action.replace('batchUpsert', '');
+      const sheetName = (entity === 'Branch' || entity === 'bank_branchs' || entity === 'Office') ? 'Office' : entity;
+      if (Array.isArray(payload)) {
+        payload = payload.map(item => upsertRow(ss, sheetName, item));
+      }
+    }
     else if (action.startsWith('delete')) {
       const entity = action.replace('delete', '');
       const sheetName = (entity === 'Branch' || entity === 'bank_branchs') ? 'Bank_Branch' : entity;
@@ -107,7 +117,6 @@ function upsertRow(ss, sheetName, data) {
   const idKey = headers[0];
   let idValue = data[idKey];
 
-  // Robust ID resolution
   if (!idValue || Number(idValue) === 0) {
     idValue = getNextId(sheet);
     data[idKey] = idValue;
@@ -119,26 +128,7 @@ function upsertRow(ss, sheetName, data) {
     if (rows[i][0].toString().trim() === idValue.toString().trim()) { rowIndex = i + 1; break; }
   }
 
-  // DRIVE CLEANUP LOGIC for Photos/Docs
-  if (rowIndex > 0 && sheetName === 'Employee') {
-    const oldRow = rows[rowIndex - 1];
-    headers.forEach((h, i) => {
-      const headerName = h.toString().trim().toLowerCase();
-      if (headerName === 'da_doc' || headerName === 'photo') {
-        const oldUrl = oldRow[i];
-        const dataKey = Object.keys(data).find(k => k.toLowerCase() === headerName);
-        const newUrl = dataKey ? data[dataKey] : undefined;
-        const isBeingReplacedByUpload = (headerName === 'photo' && data.photoData) || (headerName === 'da_doc' && data.fileData);
-        if (oldUrl && oldUrl.indexOf('drive.google.com') !== -1) {
-          if (newUrl === "" || newUrl === null || (newUrl !== undefined && newUrl !== oldUrl) || isBeingReplacedByUpload) {
-             deleteFileByUrl(oldUrl);
-          }
-        }
-      }
-    });
-  }
-
-  // Handle Base64 Uploads
+  // File Upload Logic
   if (data.photoData && data.photoData.base64) {
     data.Photo = uploadFileToDrive(data.photoData, FOLDER_ID_PHOTOS);
     delete data.photoData;
@@ -148,7 +138,7 @@ function upsertRow(ss, sheetName, data) {
     delete data.fileData;
   }
 
-  // Map JS object to Sheet row based on header name (case-insensitive)
+  // Header Mapping
   const rowData = headers.map(h => {
     const hStr = h.toString().toLowerCase().trim();
     const key = Object.keys(data).find(k => k.toLowerCase().trim() === hStr);
@@ -161,21 +151,6 @@ function upsertRow(ss, sheetName, data) {
     sheet.appendRow(rowData);
   }
   return data;
-}
-
-function deleteFileByUrl(url) {
-  if (!url || typeof url !== 'string') return;
-  try {
-    let fileId = "";
-    if (url.indexOf("id=") !== -1) {
-      fileId = url.split("id=")[1].split("&")[0];
-    } else if (url.indexOf("/d/") !== -1) {
-      fileId = url.split("/d/")[1].split("/")[0];
-    }
-    if (fileId && fileId.length > 5) {
-      DriveApp.getFileById(fileId).setTrashed(true);
-    }
-  } catch (e) {}
 }
 
 function getNextId(sheet) {
@@ -220,15 +195,6 @@ function deleteRow(ss, sheetName, payload) {
   const vals = sheet.getDataRange().getValues();
   for (let i = vals.length - 1; i >= 1; i--) {
     if (vals[i][0].toString().trim() === idValue.toString().trim()) { 
-      if (sheetName === 'Employee') {
-         const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-         headers.forEach((h, hIdx) => {
-           const hn = h.toString().toLowerCase();
-           if ((hn === 'photo' || hn === 'da_doc') && vals[i][hIdx]) {
-             deleteFileByUrl(vals[i][hIdx]);
-           }
-         });
-      }
       sheet.deleteRow(i + 1); 
       break; 
     }

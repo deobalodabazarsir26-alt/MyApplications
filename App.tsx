@@ -17,9 +17,6 @@ import ServiceMasterManagement from './components/ServiceMasterManagement';
 import FinalizationModule from './components/FinalizationModule';
 import { RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
-// Using 0 as a placeholder to signal the Apps Script to generate a sequential ID
-export const generatePlaceholderId = () => 0;
-
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
@@ -100,31 +97,12 @@ export default function App() {
 
           const processValue = (v: any) => {
             if (v === null || v === undefined) return;
-            
-            if (Array.isArray(v)) {
-              v.forEach(processValue);
-            } else if (typeof v === 'string') {
-              const trimmed = v.trim();
-              if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-                try {
-                  const arr = JSON.parse(trimmed);
-                  if (Array.isArray(arr)) arr.forEach(processValue);
-                } catch (e) {
-                  const stripped = trimmed.replace(/[\[\]]/g, '');
-                  stripped.split(',').forEach(item => {
-                    const n = Math.floor(Number(item.trim()));
-                    if (!isNaN(n)) parsedIds.push(n);
-                  });
-                }
-              } else if (trimmed.includes(',')) {
-                trimmed.split(',').forEach(item => {
-                  const n = Math.floor(Number(item.trim()));
-                  if (!isNaN(n)) parsedIds.push(n);
-                });
-              } else {
-                const n = Math.floor(Number(trimmed));
+            if (Array.isArray(v)) v.forEach(processValue);
+            else if (typeof v === 'string') {
+              v.replace(/[\[\]]/g, '').split(',').forEach(item => {
+                const n = Math.floor(Number(item.trim()));
                 if (!isNaN(n)) parsedIds.push(n);
-              }
+              });
             } else if (typeof v === 'number' && !isNaN(v)) {
               parsedIds.push(Math.floor(v));
             }
@@ -145,7 +123,7 @@ export default function App() {
       setLastSynced(new Date());
       try { localStorage.setItem('ems_data', JSON.stringify(mergedData)); } catch (e) {}
     } else {
-      setSyncError("Cloud connection timeout. Please verify internet and script deployment.");
+      setSyncError("Cloud connection timeout. Check internet and script deployment.");
     }
     if (showIndicator) setIsLoading(false);
   }, []);
@@ -168,7 +146,7 @@ export default function App() {
   }, [currentUser, data.employees, data.offices]);
 
   const performSync = async (action: string, payload: any, newState: AppData, listKey: keyof AppData, idKey: string) => {
-    if (isSyncing) return { success: false, error: 'Sync already in progress' };
+    if (isSyncing) return { success: false, error: 'Sync in progress' };
     setIsSyncing(true);
     setSyncError(null);
     setData(newState);
@@ -191,7 +169,6 @@ export default function App() {
           const localId = Math.floor(Number(item[idKey]));
           const match = serverItems.find((si: any) => Math.floor(Number(si[idKey])) === localId);
           if (match) return match;
-          // New items that might have been placeholder 0
           if (localId === 0 && !isBatch && action.startsWith('upsert')) return serverObjOrArray;
           return item;
         });
@@ -205,38 +182,17 @@ export default function App() {
     return result;
   };
 
-  const upsertUser = (user: User) => {
-    const isNew = !user.User_ID || Number(user.User_ID) === 0;
-    const payload = { ...user, User_ID: isNew ? 0 : user.User_ID };
-    const newUsers = isNew ? [...data.users, payload] : data.users.map(u => Math.floor(Number(u.User_ID)) === Math.floor(Number(user.User_ID)) ? user : u);
-    return performSync('upsertUser', payload, { ...data, users: newUsers as User[] }, 'users', 'User_ID');
-  };
-
-  const deleteUser = (userId: number) => {
-    const id = Math.floor(Number(userId));
-    if (data.offices.some(o => Math.floor(Number(o.User_ID)) === id)) return alert("User is active custodian for offices.");
-    const newUsers = data.users.filter(u => Math.floor(Number(u.User_ID)) !== id);
-    return performSync('deleteUser', { User_ID: id }, { ...data, users: newUsers }, 'users', 'User_ID');
-  };
-
-  const upsertDepartment = (dept: Department) => {
-    const isNew = !dept.Department_ID || Number(dept.Department_ID) === 0;
-    const payload = { ...dept, Department_ID: isNew ? 0 : dept.Department_ID };
-    const newDepts = isNew ? [...data.departments, payload] : data.departments.map(d => Math.floor(Number(d.Department_ID)) === Math.floor(Number(dept.Department_ID)) ? dept : d);
-    return performSync('upsertDepartment', payload, { ...data, departments: newDepts as Department[] }, 'departments', 'Department_ID');
-  };
-
-  const deleteDepartment = (deptId: number) => {
-    const id = Math.floor(Number(deptId));
-    const newDepts = data.departments.filter(d => Math.floor(Number(d.Department_ID)) !== id);
-    return performSync('deleteDepartment', { Department_ID: id }, { ...data, departments: newDepts }, 'departments', 'Department_ID');
-  };
-
+  // CRUD functions implementation
   const upsertOffice = (office: Office) => {
     const isNew = !office.Office_ID || Number(office.Office_ID) === 0;
     const payload = { ...office, Office_ID: isNew ? 0 : office.Office_ID };
     const newOffices = isNew ? [...data.offices, payload] : data.offices.map(o => Math.floor(Number(o.Office_ID)) === Math.floor(Number(office.Office_ID)) ? office : o);
     return performSync('upsertOffice', payload, { ...data, offices: newOffices as Office[] }, 'offices', 'Office_ID');
+  };
+
+  const deleteOffice = (id: number) => {
+    const newList = data.offices.filter(o => Math.floor(Number(o.Office_ID)) !== Math.floor(Number(id)));
+    return performSync('deleteOffice', { Office_ID: id }, { ...data, offices: newList }, 'offices', 'Office_ID');
   };
 
   const upsertOffices = (offices: Office[]) => {
@@ -247,109 +203,127 @@ export default function App() {
     return performSync('batchUpsertOffice', offices, { ...data, offices: updatedOffices }, 'offices', 'Office_ID');
   };
 
-  const deleteOffice = (officeId: number) => {
-    const id = Math.floor(Number(officeId));
-    const newOffices = data.offices.filter(o => Math.floor(Number(o.Office_ID)) !== id);
-    return performSync('deleteOffice', { Office_ID: id }, { ...data, offices: newOffices }, 'offices', 'Office_ID');
+  const upsertUser = (user: User) => {
+    const isNew = !user.User_ID || Number(user.User_ID) === 0;
+    const payload = { ...user, User_ID: isNew ? 0 : user.User_ID };
+    const newList = isNew ? [...data.users, payload] : data.users.map(u => Math.floor(Number(u.User_ID)) === Math.floor(Number(user.User_ID)) ? user : u);
+    return performSync('upsertUser', payload, { ...data, users: newList as User[] }, 'users', 'User_ID');
   };
 
-  const upsertBank = async (bank: Bank) => {
+  const deleteUser = (id: number) => {
+    const newList = data.users.filter(u => Math.floor(Number(u.User_ID)) !== Math.floor(Number(id)));
+    return performSync('deleteUser', { User_ID: id }, { ...data, users: newList }, 'users', 'User_ID');
+  };
+
+  const upsertDepartment = (dept: Department) => {
+    const isNew = !dept.Department_ID || Number(dept.Department_ID) === 0;
+    const payload = { ...dept, Department_ID: isNew ? 0 : dept.Department_ID };
+    const newList = isNew ? [...data.departments, payload] : data.departments.map(d => Math.floor(Number(d.Department_ID)) === Math.floor(Number(dept.Department_ID)) ? dept : d);
+    return performSync('upsertDepartment', payload, { ...data, departments: newList as Department[] }, 'departments', 'Department_ID');
+  };
+
+  const deleteDepartment = (id: number) => {
+    const newList = data.departments.filter(d => Math.floor(Number(d.Department_ID)) !== Math.floor(Number(id)));
+    return performSync('deleteDepartment', { Department_ID: id }, { ...data, departments: newList }, 'departments', 'Department_ID');
+  };
+
+  const upsertBank = (bank: Bank) => {
     const isNew = !bank.Bank_ID || Number(bank.Bank_ID) === 0;
     const payload = { ...bank, Bank_ID: isNew ? 0 : bank.Bank_ID };
-    const newBanks = isNew ? [...data.banks, payload] : data.banks.map(b => Math.floor(Number(b.Bank_ID)) === Math.floor(Number(bank.Bank_ID)) ? bank : b);
-    return await performSync('upsertBank', payload, { ...data, banks: newBanks as Bank[] }, 'banks', 'Bank_ID');
+    const newList = isNew ? [...data.banks, payload] : data.banks.map(b => Math.floor(Number(b.Bank_ID)) === Math.floor(Number(bank.Bank_ID)) ? bank : b);
+    return performSync('upsertBank', payload, { ...data, banks: newList as Bank[] }, 'banks', 'Bank_ID');
   };
 
-  const deleteBank = (bankId: number) => {
-    const id = Math.floor(Number(bankId));
-    const newBanks = data.banks.filter(b => Math.floor(Number(b.Bank_ID)) !== id);
-    return performSync('deleteBank', { Bank_ID: id }, { ...data, banks: newBanks }, 'banks', 'Bank_ID');
+  const deleteBank = (id: number) => {
+    const newList = data.banks.filter(b => Math.floor(Number(b.Bank_ID)) !== Math.floor(Number(id)));
+    return performSync('deleteBank', { Bank_ID: id }, { ...data, banks: newList }, 'banks', 'Bank_ID');
   };
 
-  const upsertBranch = async (branch: BankBranch) => {
+  const upsertBranch = (branch: BankBranch) => {
     const isNew = !branch.Branch_ID || Number(branch.Branch_ID) === 0;
     const payload = { ...branch, Branch_ID: isNew ? 0 : branch.Branch_ID };
-    const newBranches = isNew ? [...data.branches, payload] : data.branches.map(b => Math.floor(Number(b.Branch_ID)) === Math.floor(Number(branch.Branch_ID)) ? branch : b);
-    return await performSync('upsertBranch', payload, { ...data, branches: newBranches as BankBranch[] }, 'branches', 'Branch_ID');
+    const newList = isNew ? [...data.branches, payload] : data.branches.map(b => Math.floor(Number(b.Branch_ID)) === Math.floor(Number(branch.Branch_ID)) ? branch : b);
+    return performSync('upsertBranch', payload, { ...data, branches: newList as BankBranch[] }, 'branches', 'Branch_ID');
   };
 
-  const deleteBranch = (branchId: number) => {
-    const id = Math.floor(Number(branchId));
-    const newBranches = data.branches.filter(b => Math.floor(Number(b.Branch_ID)) !== id);
-    return performSync('deleteBranch', { Bank_ID: id }, { ...data, branches: newBranches }, 'banks', 'Bank_ID');
+  const deleteBranch = (id: number) => {
+    const newList = data.branches.filter(b => Math.floor(Number(b.Branch_ID)) !== Math.floor(Number(id)));
+    return performSync('deleteBranch', { Branch_ID: id }, { ...data, branches: newList }, 'branches', 'Branch_ID');
   };
 
   const upsertPost = (post: Post) => {
     const isNew = !post.Post_ID || Number(post.Post_ID) === 0;
     const payload = { ...post, Post_ID: isNew ? 0 : post.Post_ID };
-    const newPosts = isNew ? [...data.posts, payload] : data.posts.map(p => Math.floor(Number(p.Post_ID)) === Math.floor(Number(post.Post_ID)) ? post : p);
-    return performSync('upsertPost', payload, { ...data, posts: newPosts as Post[] }, 'posts', 'Post_ID');
+    const newList = isNew ? [...data.posts, payload] : data.posts.map(p => Math.floor(Number(p.Post_ID)) === Math.floor(Number(post.Post_ID)) ? post : p);
+    return performSync('upsertPost', payload, { ...data, posts: newList as Post[] }, 'posts', 'Post_ID');
   };
 
-  const deletePost = (postId: number) => {
-    const id = Math.floor(Number(postId));
-    const newPosts = data.posts.filter(p => Math.floor(Number(p.Post_ID)) !== id);
-    return performSync('deletePost', { Post_ID: id }, { ...data, posts: newPosts }, 'posts', 'Post_ID');
+  const deletePost = (id: number) => {
+    const newList = data.posts.filter(p => Math.floor(Number(p.Post_ID)) !== Math.floor(Number(id)));
+    return performSync('deletePost', { Post_ID: id }, { ...data, posts: newList }, 'posts', 'Post_ID');
   };
 
   const upsertPayscale = (pay: Payscale) => {
     const isNew = !pay.Pay_ID || Number(pay.Pay_ID) === 0;
     const payload = { ...pay, Pay_ID: isNew ? 0 : pay.Pay_ID };
-    const newPays = isNew ? [...data.payscales, payload] : data.payscales.map(p => Math.floor(Number(p.Pay_ID)) === Math.floor(Number(pay.Pay_ID)) ? pay : p);
-    return performSync('upsertPayscale', payload, { ...data, payscales: newPays as Payscale[] }, 'payscales', 'Pay_ID');
+    const newList = isNew ? [...data.payscales, payload] : data.payscales.map(p => Math.floor(Number(p.Pay_ID)) === Math.floor(Number(pay.Pay_ID)) ? pay : p);
+    return performSync('upsertPayscale', payload, { ...data, payscales: newList as Payscale[] }, 'payscales', 'Pay_ID');
   };
 
-  const deletePayscale = (payId: number) => {
-    const id = Math.floor(Number(payId));
-    const newPays = data.payscales.filter(p => Math.floor(Number(p.Pay_ID)) !== id);
-    return performSync('deletePayscale', { Pay_ID: id }, { ...data, payscales: newPays }, 'payscales', 'Pay_ID');
+  const deletePayscale = (id: number) => {
+    const newList = data.payscales.filter(p => Math.floor(Number(p.Pay_ID)) !== Math.floor(Number(id)));
+    return performSync('deletePayscale', { Pay_ID: id }, { ...data, payscales: newList }, 'payscales', 'Pay_ID');
   };
 
-  const upsertEmployee = (employee: Employee) => {
-    const isNew = !employee.Employee_ID || Number(employee.Employee_ID) === 0;
-    const payload = { ...employee, Employee_ID: isNew ? 0 : employee.Employee_ID };
-    const newEmployees = isNew ? [...data.employees, payload] : data.employees.map(e => Math.floor(Number(e.Employee_ID)) === Math.floor(Number(employee.Employee_ID)) ? employee : e);
-    
-    const result = performSync('upsertEmployee', payload, { ...data, employees: newEmployees as Employee[] }, 'employees', 'Employee_ID');
-    setEditingEmployee(null);
-    setActiveTab('employees');
-    return result;
+  const upsertEmployee = (emp: Employee) => {
+    const isNew = !emp.Employee_ID || Number(emp.Employee_ID) === 0;
+    const payload = { ...emp, Employee_ID: isNew ? 0 : emp.Employee_ID };
+    const newList = isNew ? [...data.employees, payload] : data.employees.map(e => Math.floor(Number(e.Employee_ID)) === Math.floor(Number(emp.Employee_ID)) ? emp : e);
+    return performSync('upsertEmployee', payload, { ...data, employees: newList as Employee[] }, 'employees', 'Employee_ID');
   };
 
-  const deleteEmployee = (empId: number) => {
-    const id = Math.floor(Number(empId));
-    const newEmployees = data.employees.filter(e => Math.floor(Number(e.Employee_ID)) !== id);
-    return performSync('deleteEmployee', { Employee_ID: id }, { ...data, employees: newEmployees }, 'employees', 'Employee_ID');
+  const deleteEmployee = (id: number) => {
+    const newList = data.employees.filter(e => Math.floor(Number(e.Employee_ID)) !== Math.floor(Number(id)));
+    return performSync('deleteEmployee', { Employee_ID: id }, { ...data, employees: newList }, 'employees', 'Employee_ID');
   };
 
-  const togglePostSelection = (postId: number) => {
+  const togglePostSelection = async (postId: number) => {
     if (!currentUser) return;
     const userId = Math.floor(Number(currentUser.User_ID));
     const currentSelections = data.userPostSelections[userId] || [];
-    const newSelections = currentSelections.includes(postId)
+    const isSelected = currentSelections.includes(postId);
+    const newSelections = isSelected 
       ? currentSelections.filter(id => id !== postId)
       : [...currentSelections, postId];
-    const newMap = { ...data.userPostSelections, [userId]: newSelections };
     
-    setIsSyncing(true);
-    return syncService.saveData('updateUserPostSelections', { User_ID: userId, Post_IDs: newSelections }).then(res => {
-      if (res.success) {
-        setData(prev => ({ ...prev, userPostSelections: newMap }));
-        setLastSynced(new Date());
+    const newState = {
+      ...data,
+      userPostSelections: {
+        ...data.userPostSelections,
+        [userId]: newSelections
       }
-      setIsSyncing(false);
-      return res;
-    });
+    };
+
+    setIsSyncing(true);
+    setSyncError(null);
+    setData(newState);
+
+    const result = await syncService.saveData('saveUserPostSelections', { userId, postIds: newSelections });
+    
+    if (!result.success) {
+      setSyncError(`Sync error: ${result.error}`);
+      await loadData(false);
+    } else {
+      setLastSynced(new Date());
+      try { localStorage.setItem('ems_data', JSON.stringify(newState)); } catch (e) {}
+    }
+    setIsSyncing(false);
+    return result;
   };
 
-  if (!currentUser) {
-    return <Login users={data.users || []} onLogin={(user) => {
-      setCurrentUser(user);
-      localStorage.setItem('ems_user', JSON.stringify(user));
-    }} />;
-  }
-
   const renderContent = () => {
+    if (!currentUser) return <Login users={data.users} onLogin={(user) => { setCurrentUser(user); localStorage.setItem('ems_user', JSON.stringify(user)); }} />;
+
     if (activeTab === 'employeeForm' || editingEmployee) {
       return (
         <EmployeeForm 
@@ -366,25 +340,8 @@ export default function App() {
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard employees={filteredEmployees} data={data} />;
-      case 'employees': return (
-        <EmployeeList 
-          employees={filteredEmployees} 
-          data={data} 
-          currentUser={currentUser}
-          onEdit={setEditingEmployee}
-          onAddNew={() => setActiveTab('employeeForm')}
-          onDelete={deleteEmployee}
-        />
-      );
-      case 'finalization': return (
-        <FinalizationModule 
-          data={data} 
-          currentUser={currentUser} 
-          onUpdateOffice={upsertOffice}
-          onUpdateOffices={upsertOffices}
-          onEditEmployee={(emp) => { setEditingEmployee(emp); setActiveTab('employeeForm'); }}
-        />
-      );
+      case 'employees': return <EmployeeList employees={filteredEmployees} data={data} currentUser={currentUser} onEdit={setEditingEmployee} onAddNew={() => setActiveTab('employeeForm')} onDelete={deleteEmployee} />;
+      case 'finalization': return <FinalizationModule data={data} currentUser={currentUser} onUpdateOffice={upsertOffice} onUpdateOffices={upsertOffices} onEditEmployee={(emp) => { setEditingEmployee(emp); setActiveTab('employeeForm'); }} />;
       case 'managePosts': return <UserPostSelection data={data} currentUser={currentUser} onToggle={togglePostSelection} />;
       case 'users': return <UserManagement data={data} onSaveUser={upsertUser} onDeleteUser={deleteUser} />;
       case 'offices': return <OfficeManagement data={data} onSaveOffice={upsertOffice} onDeleteOffice={deleteOffice} />;
@@ -397,41 +354,40 @@ export default function App() {
 
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ overflow: 'hidden' }}>
-      <div className="flex-shrink-0 bg-dark shadow-lg" style={{ zIndex: 1100 }}>
-        <Sidebar data={data} activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={() => { setCurrentUser(null); localStorage.removeItem('ems_user'); }} />
-      </div>
+      {currentUser && (
+        <div className="flex-shrink-0 bg-dark shadow-lg" style={{ zIndex: 1100, width: '280px', minWidth: '280px' }}>
+          <Sidebar data={data} activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={() => { setCurrentUser(null); localStorage.removeItem('ems_user'); }} />
+        </div>
+      )}
       <div className="flex-grow-1 d-flex flex-column" style={{ overflowY: 'auto', height: '100vh', position: 'relative' }}>
         <header className="bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center sticky-top shadow-sm" style={{ zIndex: 1000 }}>
           <div className="d-flex align-items-center gap-3">
             <h5 className="mb-0 fw-bold text-dark">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1).replace(/([A-Z])/g, ' $1')}</h5>
             {isSyncing ? (
-              <span className="badge bg-primary-subtle text-primary d-flex align-items-center gap-1 animate-pulse"><RefreshCw size={12} className="animate-spin" /> Syncing...</span>
+              <span className="badge bg-primary-subtle text-primary animate-pulse d-flex align-items-center gap-1"><RefreshCw size={12} className="animate-spin" /> Syncing...</span>
             ) : syncError ? (
-              <span className="badge bg-danger-subtle text-danger d-flex align-items-center gap-1"><AlertCircle size={12} /> Sync Notice</span>
+              <span className="badge bg-danger-subtle text-danger d-flex align-items-center gap-1"><AlertCircle size={12} /> Sync Error</span>
             ) : (
-              <span className="badge bg-success-subtle text-success d-flex align-items-center gap-1"><CheckCircle size={12} /> Connected</span>
+              <span className="badge bg-success-subtle text-success d-flex align-items-center gap-1"><CheckCircle size={12} /> Cloud Connected</span>
             )}
           </div>
           <div className="d-flex align-items-center gap-3">
-            <div className="text-end d-none d-md-block">
-              <div className="small text-muted d-flex align-items-center gap-1"><Clock size={12} /> Last: {lastSynced.toLocaleTimeString()}</div>
-            </div>
+            <div className="small text-muted d-none d-md-block"><Clock size={12} /> Last: {lastSynced.toLocaleTimeString()}</div>
             <button onClick={() => loadData()} disabled={isSyncing} className="btn btn-light btn-sm rounded-pill border shadow-sm px-3 d-flex align-items-center gap-2">
-              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} /> {isSyncing ? 'Syncing' : 'Refresh'}
+              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} /> Refresh
             </button>
           </div>
         </header>
-        <main className="p-4 flex-grow-1">
-          {syncError && <div className="alert alert-warning border-0 shadow-sm d-flex align-items-center gap-2 mb-4"><AlertCircle size={18} /><div><div className="fw-bold">Sync Warning</div><div className="small">{syncError}</div></div></div>}
+        <main className="p-4 flex-grow-1 position-relative">
+          {syncError && <div className="alert alert-warning border-0 shadow-sm mb-4"><AlertCircle size={18} className="me-2" /><strong>Sync Warning:</strong> {syncError}</div>}
           {isLoading && !isSyncing ? (
             <div className="d-flex flex-column align-items-center justify-content-center py-5 mt-5">
               <div className="spinner-border text-primary mb-3" role="status"></div>
-              <p className="text-muted fw-medium">Loading Workspace...</p>
+              <p className="text-muted fw-medium">Loading Records...</p>
             </div>
           ) : renderContent()}
         </main>
       </div>
-      <style>{`.animate-spin { animation: spin 1s linear infinite; } @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }`}</style>
     </div>
   );
 }
