@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppData, User, UserType, Employee, Office, Department } from '../types';
-import { ShieldCheck, Lock, Unlock, Users, Building2, ChevronRight, Edit3, CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-react';
+import { ShieldCheck, Lock, Unlock, Users, Building2, ChevronRight, Edit3, CheckCircle2, AlertCircle, Info, Loader2, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 interface FinalizationModuleProps {
   data: AppData;
@@ -14,6 +14,10 @@ interface FinalizationModuleProps {
 const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUser, onUpdateOffice, onUpdateOffices, onEditEmployee }) => {
   const isAdmin = currentUser.User_Type === UserType.ADMIN;
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 30;
 
   // Normal User State - Get offices assigned to this user
   const myOffices = useMemo(() => 
@@ -50,6 +54,25 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
     const idNum = Math.floor(Number(selectedDeptId));
     return data.offices.filter(o => Math.floor(Number(o.Department_ID)) === idNum);
   }, [data.offices, selectedDeptId]);
+
+  // Pagination Logic for Offices (Admin)
+  const totalOfficePages = Math.ceil(deptOffices.length / itemsPerPage);
+  const paginatedOffices = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return deptOffices.slice(start, start + itemsPerPage);
+  }, [deptOffices, currentPage]);
+
+  // Pagination Logic for Employees (User)
+  const totalEmployeePages = Math.ceil(officeEmployees.length / itemsPerPage);
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return officeEmployees.slice(start, start + itemsPerPage);
+  }, [officeEmployees, currentPage]);
+
+  // Reset page when department or office changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDeptId, selectedOfficeId]);
 
   const hasAnyPending = useMemo(() => 
     deptOffices.some(o => o.Finalized?.toString().toLowerCase() !== 'yes'), 
@@ -111,6 +134,35 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
     }
   };
 
+  const renderPagination = (current: number, total: number) => {
+    if (total <= 1) return null;
+    return (
+      <div className="d-flex justify-content-center mt-4 mb-4">
+        <nav>
+          <ul className="pagination pagination-sm mb-0">
+            <li className={`page-item ${current === 1 ? 'disabled' : ''}`}>
+              <button className="page-link shadow-none border-0 bg-white text-primary" onClick={() => setCurrentPage(current - 1)}>
+                <ChevronLeft size={18} />
+              </button>
+            </li>
+            {[...Array(total)].map((_, i) => (
+              <li key={i} className={`page-item ${current === i + 1 ? 'active' : ''}`}>
+                <button className={`page-link shadow-none border-0 rounded-pill mx-1 ${current === i + 1 ? 'bg-primary text-white' : 'bg-white text-primary'}`} onClick={() => setCurrentPage(i + 1)}>
+                  {i + 1}
+                </button>
+              </li>
+            ))}
+            <li className={`page-item ${current === total ? 'disabled' : ''}`}>
+              <button className="page-link shadow-none border-0 bg-white text-primary" onClick={() => setCurrentPage(current + 1)}>
+                <ChevronRightIcon size={18} />
+              </button>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    );
+  };
+
   if (isAdmin) {
     return (
       <div className="finalization-admin animate-fade-in d-flex flex-column h-100 position-relative">
@@ -161,8 +213,8 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
             </div>
           </div>
         </div>
-        <div className="row g-4 pb-4">
-          {deptOffices.map(office => {
+        <div className="row g-4 pb-2">
+          {paginatedOffices.map(office => {
             const isLocked = office.Finalized?.toString().toLowerCase() === 'yes';
             return (
               <div key={office.Office_ID} className="col-md-6 col-lg-4">
@@ -186,6 +238,7 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
             );
           })}
         </div>
+        {renderPagination(currentPage, totalOfficePages)}
       </div>
     );
   }
@@ -231,8 +284,8 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
         )}
       </div>
 
-      <div className="row g-4 mb-4">
-        {officeEmployees.map(emp => (
+      <div className="row g-4 mb-2">
+        {paginatedEmployees.map(emp => (
           <div key={emp.Employee_ID} className="col-12 col-md-6 col-xl-4">
             <div className="card h-100 border-0 shadow-sm rounded-4">
               <div className="card-body p-3">
@@ -253,6 +306,8 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
           </div>
         ))}
       </div>
+      
+      {renderPagination(currentPage, totalEmployeePages)}
 
       {selectedOffice && (
         <div className="mt-auto sticky-bottom py-3 bg-light" style={{ zIndex: 10, bottom: '-24px', margin: '0 -24px' }}>
@@ -287,6 +342,8 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
         .sticky-bottom { position: sticky; bottom: -24px; }
         .processing-overlay { cursor: wait; }
         .transition-all { transition: all 0.2s ease; }
+        .page-link:hover { background-color: #f1f5f9; }
+        .page-item.active .page-link { background-color: #4f46e5 !important; }
       `}</style>
     </div>
   );
