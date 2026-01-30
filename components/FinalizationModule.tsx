@@ -113,7 +113,17 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
 
   if (isAdmin) {
     return (
-      <div className="finalization-admin animate-fade-in d-flex flex-column h-100">
+      <div className="finalization-admin animate-fade-in d-flex flex-column h-100 position-relative">
+        {isProcessing && (
+          <div className="processing-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-white bg-opacity-75" style={{ zIndex: 1000, backdropFilter: 'blur(2px)' }}>
+            <div className="card shadow-lg border-0 rounded-4 p-4 text-center">
+              <Loader2 size={48} className="text-primary animate-spin mb-3 mx-auto" />
+              <h6 className="fw-bold mb-1">Processing Department Data</h6>
+              <p className="small text-muted mb-0">Synchronizing records with Google Sheets...</p>
+            </div>
+          </div>
+        )}
+
         <div className="card border-0 shadow-sm rounded-4 mb-4">
           <div className="card-body p-4">
             <div className="row align-items-center g-3">
@@ -130,11 +140,21 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
               </div>
               <div className="col-md-4">
                 <div className="d-flex gap-2">
-                  <button onClick={() => handleBatchUpdate('Yes')} disabled={isProcessing || !hasAnyPending} className="btn btn-primary flex-grow-1 rounded-pill tiny fw-bold d-flex align-items-center justify-content-center gap-1">
-                    {isProcessing ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />} Finalize All
+                  <button 
+                    onClick={() => handleBatchUpdate('Yes')} 
+                    disabled={isProcessing || !hasAnyPending} 
+                    className="btn btn-primary flex-grow-1 rounded-pill tiny fw-bold d-flex align-items-center justify-content-center gap-1 shadow-sm"
+                  >
+                    {isProcessing ? <Loader2 size={12} className="animate-spin" /> : <Lock size={12} />} 
+                    Finalize All
                   </button>
-                  <button onClick={() => handleBatchUpdate('No')} disabled={isProcessing || !hasAnyFinalized} className="btn btn-outline-danger flex-grow-1 rounded-pill tiny fw-bold d-flex align-items-center justify-content-center gap-1">
-                    {isProcessing ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />} De-Finalize All
+                  <button 
+                    onClick={() => handleBatchUpdate('No')} 
+                    disabled={isProcessing || !hasAnyFinalized} 
+                    className="btn btn-outline-danger flex-grow-1 rounded-pill tiny fw-bold d-flex align-items-center justify-content-center gap-1 shadow-sm"
+                  >
+                    {isProcessing ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />} 
+                    De-Finalize All
                   </button>
                 </div>
               </div>
@@ -146,7 +166,7 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
             const isLocked = office.Finalized?.toString().toLowerCase() === 'yes';
             return (
               <div key={office.Office_ID} className="col-md-6 col-lg-4">
-                <div className={`card h-100 border-0 shadow-sm rounded-4 ${isLocked ? 'bg-success-subtle' : 'bg-white'}`}>
+                <div className={`card h-100 border-0 shadow-sm rounded-4 transition-all ${isLocked ? 'bg-success-subtle' : 'bg-white'}`}>
                   <div className="card-body p-4 d-flex flex-column">
                     <div className="d-flex justify-content-between align-items-start mb-3">
                       <div className={`p-3 rounded-4 ${isLocked ? 'bg-success text-white' : 'bg-light text-muted'}`}>
@@ -173,7 +193,17 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
   const isSelectedOfficeFinalized = selectedOffice?.Finalized?.toString().toLowerCase() === 'yes';
 
   return (
-    <div className="finalization-user animate-fade-in d-flex flex-column h-100">
+    <div className="finalization-user animate-fade-in d-flex flex-column h-100 position-relative">
+      {isProcessing && (
+        <div className="processing-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-white bg-opacity-75" style={{ zIndex: 1000, backdropFilter: 'blur(2px)' }}>
+          <div className="card shadow-lg border-0 rounded-4 p-4 text-center">
+            <Loader2 size={48} className="text-primary animate-spin mb-3 mx-auto" />
+            <h6 className="fw-bold mb-1">Finalizing Records</h6>
+            <p className="small text-muted mb-0">Synchronizing with cloud storage...</p>
+          </div>
+        </div>
+      )}
+
       <div className="card border-0 shadow-sm rounded-4 mb-4">
         <div className="card-body p-4">
           <div className="row align-items-center g-3">
@@ -237,7 +267,7 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
                   <div className="small text-muted">{isSelectedOfficeFinalized ? 'Records are locked.' : `Ready to finalize ${officeEmployees.length} records?`}</div>
                 </div>
               </div>
-              <button onClick={() => handleToggleFinalization(selectedOffice)} disabled={isProcessing} className={`btn btn-lg px-5 rounded-pill shadow-lg d-flex align-items-center gap-2 fw-bold ${isSelectedOfficeFinalized ? 'btn-outline-success border-2' : 'btn-primary'}`}>
+              <button onClick={() => handleToggleFinalization(selectedOffice)} disabled={isProcessing} className={`btn btn-lg px-5 rounded-pill shadow-lg d-flex align-items-center gap-2 fw-bold transition-all ${isSelectedOfficeFinalized ? 'btn-outline-success border-2' : 'btn-primary'}`}>
                 {isProcessing ? <><Loader2 size={20} className="animate-spin" /> Working...</> : (isSelectedOfficeFinalized ? <><Unlock size={20} /> Re-Open Office</> : <><Lock size={20} /> Finalize Office</>)}
               </button>
             </div>
@@ -255,6 +285,8 @@ const FinalizationModule: React.FC<FinalizationModuleProps> = ({ data, currentUs
         .animate-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .sticky-bottom { position: sticky; bottom: -24px; }
+        .processing-overlay { cursor: wait; }
+        .transition-all { transition: all 0.2s ease; }
       `}</style>
     </div>
   );
