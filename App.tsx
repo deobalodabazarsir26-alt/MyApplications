@@ -182,7 +182,6 @@ export default function App() {
     return result;
   };
 
-  // CRUD functions implementation
   const upsertOffice = (office: Office) => {
     const isNew = !office.Office_ID || Number(office.Office_ID) === 0;
     const payload = { ...office, Office_ID: isNew ? 0 : office.Office_ID };
@@ -321,15 +320,13 @@ export default function App() {
     return result;
   };
 
-  const renderContent = () => {
-    if (!currentUser) return <Login users={data.users} onLogin={(user) => { setCurrentUser(user); localStorage.setItem('ems_user', JSON.stringify(user)); }} />;
-
+  const renderActiveTab = () => {
     if (activeTab === 'employeeForm' || editingEmployee) {
       return (
         <EmployeeForm 
           employee={editingEmployee}
           data={data}
-          currentUser={currentUser}
+          currentUser={currentUser!}
           onSave={upsertEmployee}
           onSaveBank={upsertBank}
           onSaveBranch={upsertBranch}
@@ -340,9 +337,9 @@ export default function App() {
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard employees={filteredEmployees} data={data} />;
-      case 'employees': return <EmployeeList employees={filteredEmployees} data={data} currentUser={currentUser} onEdit={setEditingEmployee} onAddNew={() => setActiveTab('employeeForm')} onDelete={deleteEmployee} />;
-      case 'finalization': return <FinalizationModule data={data} currentUser={currentUser} onUpdateOffice={upsertOffice} onUpdateOffices={upsertOffices} onEditEmployee={(emp) => { setEditingEmployee(emp); setActiveTab('employeeForm'); }} />;
-      case 'managePosts': return <UserPostSelection data={data} currentUser={currentUser} onToggle={togglePostSelection} />;
+      case 'employees': return <EmployeeList employees={filteredEmployees} data={data} currentUser={currentUser!} onEdit={setEditingEmployee} onAddNew={() => setActiveTab('employeeForm')} onDelete={deleteEmployee} />;
+      case 'finalization': return <FinalizationModule data={data} currentUser={currentUser!} onUpdateOffice={upsertOffice} onUpdateOffices={upsertOffices} onEditEmployee={(emp) => { setEditingEmployee(emp); setActiveTab('employeeForm'); }} />;
+      case 'managePosts': return <UserPostSelection data={data} currentUser={currentUser!} onToggle={togglePostSelection} />;
       case 'users': return <UserManagement data={data} onSaveUser={upsertUser} onDeleteUser={deleteUser} />;
       case 'offices': return <OfficeManagement data={data} onSaveOffice={upsertOffice} onDeleteOffice={deleteOffice} />;
       case 'departments': return <DepartmentManagement data={data} onSaveDepartment={upsertDepartment} onDeleteDepartment={deleteDepartment} />;
@@ -352,14 +349,45 @@ export default function App() {
     }
   };
 
+  // 1. Initial Loading State
+  if (isLoading && !isSyncing && data.users.length <= 2) { // Allow showing login even if background sync is on
+    return (
+      <div className="min-vh-100 d-flex flex-column align-items-center justify-content-center bg-light">
+        <div className="spinner-border text-primary mb-3" role="status"></div>
+        <p className="text-muted fw-medium">Initializing Secure Environment...</p>
+      </div>
+    );
+  }
+
+  // 2. Login State (No shell)
+  if (!currentUser) {
+    return (
+      <Login 
+        users={data.users} 
+        onLogin={(user) => { 
+          setCurrentUser(user); 
+          localStorage.setItem('ems_user', JSON.stringify(user)); 
+        }} 
+      />
+    );
+  }
+
+  // 3. Authenticated Shell
   return (
     <div className="d-flex min-vh-100 bg-light" style={{ overflow: 'hidden' }}>
-      {currentUser && (
-        <div className="flex-shrink-0 bg-dark shadow-lg" style={{ zIndex: 1100, width: '280px', minWidth: '280px' }}>
-          <Sidebar data={data} activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={() => { setCurrentUser(null); localStorage.removeItem('ems_user'); }} />
-        </div>
-      )}
+      {/* Sidebar - Only for authenticated users */}
+      <div className="flex-shrink-0 bg-dark shadow-lg" style={{ zIndex: 1100, width: '280px', minWidth: '280px' }}>
+        <Sidebar 
+          data={data} 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          currentUser={currentUser} 
+          onLogout={() => { setCurrentUser(null); localStorage.removeItem('ems_user'); }} 
+        />
+      </div>
+
       <div className="flex-grow-1 d-flex flex-column" style={{ overflowY: 'auto', height: '100vh', position: 'relative' }}>
+        {/* Header - Only for authenticated users */}
         <header className="bg-white border-bottom py-3 px-4 d-flex justify-content-between align-items-center sticky-top shadow-sm" style={{ zIndex: 1000 }}>
           <div className="d-flex align-items-center gap-3">
             <h5 className="mb-0 fw-bold text-dark">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1).replace(/([A-Z])/g, ' $1')}</h5>
@@ -378,14 +406,20 @@ export default function App() {
             </button>
           </div>
         </header>
+
         <main className="p-4 flex-grow-1 position-relative">
-          {syncError && <div className="alert alert-warning border-0 shadow-sm mb-4"><AlertCircle size={18} className="me-2" /><strong>Sync Warning:</strong> {syncError}</div>}
+          {syncError && (
+            <div className="alert alert-warning border-0 shadow-sm mb-4">
+              <AlertCircle size={18} className="me-2" />
+              <strong>Sync Warning:</strong> {syncError}
+            </div>
+          )}
           {isLoading && !isSyncing ? (
             <div className="d-flex flex-column align-items-center justify-content-center py-5 mt-5">
               <div className="spinner-border text-primary mb-3" role="status"></div>
               <p className="text-muted fw-medium">Loading Records...</p>
             </div>
-          ) : renderContent()}
+          ) : renderActiveTab()}
         </main>
       </div>
     </div>
