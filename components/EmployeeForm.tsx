@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Employee, AppData, ServiceType, User, UserType, Bank, BankBranch, Post } from '../types';
-import { Save, User as UserIcon, Briefcase, Landmark, Hash, Search, Loader2, Power, ExternalLink, Camera, Scissors, Smartphone, CreditCard, ZoomIn, ZoomOut, Upload } from 'lucide-react';
+import { Save, User as UserIcon, Briefcase, Landmark, Hash, Search, Loader2, Power, ExternalLink, Camera, Scissors, Smartphone, CreditCard, ZoomIn, ZoomOut, Upload, FileText, Eye, X, CheckCircle2 } from 'lucide-react';
 import { ifscService } from '../services/ifscService';
 
 interface EmployeeFormProps {
@@ -31,8 +31,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
   const [isUploading, setIsUploading] = useState(false);
   
   const [selectedDoc, setSelectedDoc] = useState<File | null>(null);
+  const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null);
   const [croppedPhotoBase64, setCroppedPhotoBase64] = useState<string | null>(null);
   const [showCropper, setShowCropper] = useState(false);
+  const [showDocViewer, setShowDocViewer] = useState(false);
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -44,6 +46,13 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
   useEffect(() => {
     offsetRef.current = offset;
   }, [offset]);
+
+  // Cleanup object URL on unmount or when preview changes
+  useEffect(() => {
+    return () => {
+      if (docPreviewUrl) URL.revokeObjectURL(docPreviewUrl);
+    };
+  }, [docPreviewUrl]);
 
   const docInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +67,14 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
       setAvailableOffices([]);
     }
   }, [formData.Department_ID, data.offices]);
+
+  // Derived state to show current bank and branch name below IFSC
+  const bankBranchDisplay = useMemo(() => {
+    const bank = data.banks.find(b => Math.floor(Number(b.Bank_ID)) === Math.floor(Number(formData.Bank_ID)));
+    const branch = data.branches.find(b => Math.floor(Number(b.Branch_ID)) === Math.floor(Number(formData.Branch_ID)));
+    if (bank && branch) return `${bank.Bank_Name} (${branch.Branch_Name})`;
+    return null;
+  }, [formData.Bank_ID, formData.Branch_ID, data.banks, data.branches]);
 
   // LOGIC: Filter Designations based on "My Designations" mapping
   const availablePosts = useMemo(() => {
@@ -201,9 +218,13 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleIfscVerify = async () => {
-    const ifscInput = formData.IFSC_Code?.trim().toUpperCase();
-    if (!ifscInput || ifscInput.length !== 11) return alert('Enter valid 11-digit IFSC');
+  const handleIfscVerify = async (manualCode?: string) => {
+    const ifscInput = (manualCode || formData.IFSC_Code)?.trim().toUpperCase();
+    if (!ifscInput || ifscInput.length !== 11) {
+      if (!manualCode) return; // Silent return for automated trigger
+      return alert('Enter valid 11-digit IFSC');
+    }
+
     setIsVerifyingIfsc(true);
     const details = await ifscService.fetchDetails(ifscInput);
     if (details) {
@@ -216,7 +237,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
         const bankRes = await onSaveBank({ Bank_Name: details.BANK, Bank_ID: 0 } as Bank);
         if (bankRes.success && bankRes.data) {
           targetBankId = Math.floor(Number(bankRes.data.Bank_ID));
-        } else {
+        } else if (manualCode) {
           alert('Could not auto-register new Bank. Using default.');
         }
       }
@@ -230,14 +251,14 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
         const branchRes = await onSaveBranch({ Branch_Name: details.BRANCH, IFSC_Code: details.IFSC, Bank_ID: targetBankId, Branch_ID: 0 } as BankBranch);
         if (branchRes.success && branchRes.data) {
           targetBranchId = Math.floor(Number(branchRes.data.Branch_ID));
-        } else {
+        } else if (manualCode) {
           alert('Could not auto-register new Branch.');
         }
       }
 
       setFormData(prev => ({ ...prev, Bank_ID: targetBankId, Branch_ID: targetBranchId, IFSC_Code: details.IFSC }));
-      alert(`Verified & Registered: ${details.BANK}, ${details.BRANCH}`);
-    } else {
+      if (manualCode) alert(`Verified & Registered: ${details.BANK}, ${details.BRANCH}`);
+    } else if (manualCode) {
       alert('IFSC code not found.');
     }
     setIsVerifyingIfsc(false);
@@ -309,12 +330,24 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
         reader.readAsDataURL(file);
       } else {
         setSelectedDoc(file);
+        // Create preview for doc if it's an image or PDF
+        if (docPreviewUrl) URL.revokeObjectURL(docPreviewUrl);
+        setDocPreviewUrl(URL.createObjectURL(file));
       }
     }
   };
 
+  const isPDF = (urlOrFile: string | File | null): boolean => {
+    if (!urlOrFile) return false;
+    if (typeof urlOrFile === 'string') {
+      return urlOrFile.toLowerCase().includes('.pdf') || urlOrFile.includes('drive.google.com') && !urlOrFile.includes('thumbnail');
+    }
+    return urlOrFile.type === 'application/pdf';
+  };
+
   return (
     <div className="card shadow-lg border-0 p-4 p-md-5 animate-in">
+      {/* Photo Alignment Cropper */}
       {showCropper && (
         <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ zIndex: 3000, backgroundColor: 'rgba(15, 23, 42, 0.96)', backdropFilter: 'blur(10px)' }}>
           <div className="bg-white p-4 rounded-4 shadow-2xl text-center" style={{ maxWidth: '440px', width: '90%' }}>
@@ -339,6 +372,40 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
             <div className="d-flex gap-2">
               <button type="button" className="btn btn-light border w-100 rounded-pill fw-bold" onClick={() => setShowCropper(false)}>Cancel</button>
               <button type="button" className="btn btn-primary w-100 rounded-pill shadow-sm fw-bold" onClick={confirmCrop}>Confirm Alignment</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Viewer Modal */}
+      {showDocViewer && (
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3 p-md-5" style={{ zIndex: 3500, backgroundColor: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(8px)' }}>
+          <div className="bg-white rounded-4 shadow-2xl d-flex flex-column" style={{ width: '100%', height: '100%', maxWidth: '1000px', maxHeight: '90vh' }}>
+            <div className="p-3 border-bottom d-flex justify-content-between align-items-center bg-light rounded-top-4">
+              <div className="d-flex align-items-center gap-2">
+                <FileText className="text-primary" size={20} />
+                <h6 className="mb-0 fw-bold">Document Viewer</h6>
+              </div>
+              <button className="btn btn-light btn-sm rounded-circle shadow-sm" onClick={() => setShowDocViewer(false)}><X size={20} /></button>
+            </div>
+            <div className="flex-grow-1 p-0 overflow-auto bg-dark d-flex align-items-center justify-content-center">
+              {isPDF(selectedDoc || formData.DA_Doc || null) ? (
+                <iframe 
+                  src={docPreviewUrl || formData.DA_Doc} 
+                  className="w-100 h-100 border-0"
+                  title="PDF Viewer"
+                />
+              ) : (
+                <img 
+                  src={docPreviewUrl || formData.DA_Doc} 
+                  className="mw-100 mh-100 object-fit-contain" 
+                  alt="Document" 
+                />
+              )}
+            </div>
+            <div className="p-3 border-top bg-light rounded-bottom-4 d-flex justify-content-between align-items-center">
+              <div className="small text-muted">{selectedDoc ? selectedDoc.name : 'Cloud Document'}</div>
+              <button className="btn btn-primary btn-sm rounded-pill px-4 fw-bold" onClick={() => setShowDocViewer(false)}>Close Preview</button>
             </div>
           </div>
         </div>
@@ -488,12 +555,28 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
                         <label className="form-label small fw-bold text-primary text-uppercase tracking-wider">IFSC Validation *</label>
                         <div className="input-group input-group-lg shadow-sm">
                             <span className="input-group-text bg-primary text-white border-primary"><Hash size={24} /></span>
-                            <input value={formData.IFSC_Code || ''} onChange={e => setFormData({...formData, IFSC_Code: e.target.value.toUpperCase()})} className="form-control fw-bold text-primary border-primary" placeholder="IFSC" />
-                            <button type="button" onClick={handleIfscVerify} className="btn btn-primary px-4 d-flex align-items-center gap-2" disabled={isVerifyingIfsc}>
+                            <input 
+                              value={formData.IFSC_Code || ''} 
+                              onChange={e => {
+                                const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                                setFormData({...formData, IFSC_Code: val});
+                                // Automated trigger on 11 characters
+                                if (val.length === 11) handleIfscVerify(val);
+                              }} 
+                              className="form-control fw-bold text-primary border-primary" 
+                              placeholder="IFSC" 
+                            />
+                            <button type="button" onClick={() => handleIfscVerify(undefined)} className="btn btn-primary px-4 d-flex align-items-center gap-2" disabled={isVerifyingIfsc}>
                                 {isVerifyingIfsc ? <Loader2 size={24} className="animate-spin" /> : <Search size={24} />}
                                 <span className="d-none d-md-inline fw-bold">Verify</span>
                             </button>
                         </div>
+                        {/* Automated display of resolved bank and branch */}
+                        {bankBranchDisplay && (
+                            <div className="mt-2 small fw-bold text-success d-flex align-items-center gap-1 animate-in">
+                                <CheckCircle2 size={14} /> {bankBranchDisplay}
+                            </div>
+                        )}
                     </div>
                     <div className="col-md-6">
                         <label className="form-label small fw-bold text-muted">Account Number *</label>
@@ -522,6 +605,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
               if (val === 'Yes') {
                 updates.DA_Reason = '';
                 updates.DA_Doc = '';
+                if (docPreviewUrl) URL.revokeObjectURL(docPreviewUrl);
+                setDocPreviewUrl(null);
+                setSelectedDoc(null);
               }
               setFormData({...formData, ...updates});
             }} 
@@ -544,12 +630,47 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
               <label className="form-label small fw-bold text-muted">Verification Proof (DA_Doc) *</label>
               <div className="input-group shadow-sm">
                 <input type="file" ref={docInputRef} className={`form-control ${errors.Doc ? 'is-invalid' : ''}`} onChange={(e) => handleFileChange(e, 'doc')} accept=".pdf,image/*" />
+                {(formData.DA_Doc || docPreviewUrl) && (
+                    <button type="button" className="btn btn-outline-primary" title="Open Document Viewer" onClick={() => setShowDocViewer(true)}>
+                        <Eye size={18}/>
+                    </button>
+                )}
                 {formData.DA_Doc && !formData.DA_Doc.includes('DRIVE_ERR') && (
-                    <a href={formData.DA_Doc} target="_blank" rel="noopener noreferrer" className="btn btn-outline-info">
-                        <ExternalLink size={16}/>
+                    <a href={formData.DA_Doc} target="_blank" rel="noopener noreferrer" className="btn btn-outline-info" title="Open in External Window">
+                        <ExternalLink size={18}/>
                     </a>
                 )}
               </div>
+              
+              {/* Document Preview Section */}
+              {(selectedDoc || (formData.DA_Doc && !formData.DA_Doc.includes('DRIVE_ERR'))) && (
+                <div 
+                  className="mt-3 p-2 bg-light border border-2 border-primary-subtle rounded-4 d-flex align-items-center gap-3 shadow-sm hover-shadow transition-all"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setShowDocViewer(true)}
+                >
+                  <div className="bg-white rounded-3 p-1 shadow-xs border flex-shrink-0" style={{width: '64px', height: '64px'}}>
+                    {(!selectedDoc && formData.DA_Doc && (formData.DA_Doc.includes('thumbnail') || formData.DA_Doc.match(/\.(jpg|jpeg|png|gif)$/i))) || (selectedDoc && selectedDoc.type.startsWith('image/')) ? (
+                      <img 
+                        src={docPreviewUrl || formData.DA_Doc} 
+                        className="w-100 h-100 object-fit-cover rounded-2" 
+                        alt="Doc Preview" 
+                      />
+                    ) : (
+                      <div className="w-100 h-100 d-flex align-items-center justify-content-center text-primary bg-primary-subtle rounded-2">
+                        <FileText size={28} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-grow-1 overflow-hidden">
+                    <div className="small fw-bold text-dark text-truncate">{selectedDoc ? selectedDoc.name : 'Uploaded Document'}</div>
+                    <div className="tiny text-muted uppercase d-flex align-items-center gap-1">
+                      {isPDF(selectedDoc || formData.DA_Doc || null) ? 'PDF Document' : 'Image File'}
+                      <span className="text-primary">• Click to View</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -561,6 +682,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({ employee, data, currentUser
           </button>
         </div>
       </form>
+
+      <style>{`
+        .hover-shadow:hover { box-shadow: 0 8px 16px rgba(0,0,0,0.1) !important; transform: translateY(-2px); }
+        .tiny { font-size: 0.65rem; }
+        .object-fit-contain { object-fit: contain; }
+        .shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.06); }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 };
